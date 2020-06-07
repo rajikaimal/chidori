@@ -68,7 +68,7 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 
 	// Literals
 	case (*ast.IntegerLiteral):
-		fmt.Println("IntegerLiteral:", node.Value)
+		fmt.Println("----- IntegerLiteral:", node.Value)
 		outputInteger(node.Value)
 		return object.NewInteger(node.Value), nil
 	case (*ast.Boolean):
@@ -100,6 +100,7 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 		return val, nil
 	case *ast.Identifier:
 		fmt.Println("Identifier:", node)
+		outputGetIdentifier(node.Value)
 		return evalIdentifier(node, env)
 	case *ast.Global:
 		val, ok := env.Get(node.Value)
@@ -257,8 +258,9 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 			selfAsEnv.Set(left.String(), right)
 			return right, nil
 		case *ast.Identifier:
-			fmt.Println("Identifier:", right)
+			fmt.Println("Here setting Identifier:", left, right)
 			right = expandToArrayIfNeeded(right)
+			//outputValue(node.Right)
 			appendToFile("\tenv.Set(\"" + left.Value + "\", right)")
 			env.Set(left.Value, right)
 			fmt.Println("Identifier:", left, right)
@@ -784,6 +786,7 @@ func createMainFunc() {
 	src := `package main
  
 import "github.com/goruby/goruby/object"
+import "fmt"
 
 func main() { 
 	env := object.NewMainEnvironment()`
@@ -795,9 +798,22 @@ func endMainFunc() {
 	appendToFile(src)
 }
 
+func outputValue(value string) {
+	src := `
+	right := object.NewInteger(` + value + `)`
+	appendToFile(src)
+}
+
 func outputInteger(value int64) {
 	src := `
 	right := object.NewInteger(` + strconv.FormatInt(value, 16) + `)`
+	appendToFile(src)
+}
+
+func outputGetIdentifier(identifierName string) {
+	//TODO: Don't disregard ok
+	src := "\tval, _ := env.Get(\"" + identifierName + "\") \n"
+	src = src + "\tfmt.Println(val)"
 	appendToFile(src)
 }
 
