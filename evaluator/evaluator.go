@@ -2,7 +2,10 @@ package evaluator
 
 import (
 	"fmt"
+	"os"
+	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/goruby/goruby/ast"
@@ -31,6 +34,7 @@ func (r rubyObjects) Type() object.Type       { return "" }
 func (r rubyObjects) Class() object.RubyClass { return nil }
 
 func expandToArrayIfNeeded(obj object.RubyObject) object.RubyObject {
+	fmt.Println("ExpandingToArray:", obj)
 	arr, ok := obj.(rubyObjects)
 	if !ok {
 		return obj
@@ -38,26 +42,34 @@ func expandToArrayIfNeeded(obj object.RubyObject) object.RubyObject {
 	return object.NewArray(arr...)
 }
 
+var file, err = os.Create("compiled.go")
+
 // Eval evaluates the given node and traverses recursive over its children
 func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 	switch node := node.(type) {
-
 	// Statements
 	case *ast.Program:
+		fmt.Println("Creating file at ast.Program")
+		createMainFunc()
 		return evalProgram(node.Statements, env)
 	case *ast.ExpressionStatement:
+		fmt.Println("Expression statement", node, node.Expression)
 		return Eval(node.Expression, env)
 	case *ast.ReturnStatement:
+		fmt.Println("Return statement", node)
 		val, err := Eval(node.ReturnValue, env)
 		if err != nil {
 			return nil, errors.WithMessage(err, "eval of return statement")
 		}
 		return &object.ReturnValue{Value: val}, nil
 	case *ast.BlockStatement:
+		fmt.Println("BlockStatment:", node)
 		return evalBlockStatement(node, env)
 
 	// Literals
 	case (*ast.IntegerLiteral):
+		fmt.Println("IntegerLiteral:", node.Value)
+		outputInteger(node.Value)
 		return object.NewInteger(node.Value), nil
 	case (*ast.Boolean):
 		return nativeBoolToBooleanObject(node.Value), nil
@@ -81,11 +93,13 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 		}
 
 		val, ok := selfAsEnv.Get(node.String())
+		fmt.Println("INstanceVariable value: ", val)
 		if !ok {
 			return object.NIL, nil
 		}
 		return val, nil
 	case *ast.Identifier:
+		fmt.Println("Identifier:", node)
 		return evalIdentifier(node, env)
 	case *ast.Global:
 		val, ok := env.Get(node.Value)
@@ -94,12 +108,16 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 		}
 		return val, nil
 	case *ast.StringLiteral:
+		fmt.Println("StringLiteral:", node)
 		return &object.String{Value: node.Value}, nil
 	case *ast.SymbolLiteral:
+		fmt.Println("SymbolLiteral:", node)
 		switch value := node.Value.(type) {
 		case *ast.Identifier:
+			fmt.Println("SymBolLiteralIdentifier:", node)
 			return &object.Symbol{Value: value.Value}, nil
 		case *ast.StringLiteral:
+			fmt.Println("SymBolLiteralStringLiteral:", node)
 			str, err := Eval(value, env)
 			if err != nil {
 				return nil, errors.WithMessage(err, "eval symbol literal string")
@@ -116,9 +134,11 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 			)
 		}
 	case *ast.FunctionLiteral:
+		fmt.Println("FunctionLiteral:", node, node.Receiver)
 		context, _ := env.Get("self")
 		_, inClassOrModule := context.(*object.Self).RubyObject.(object.Environment)
 		if node.Receiver != nil {
+			fmt.Println("FunctionLiteral Reciever: ", node.Receiver)
 			rec, err := Eval(node.Receiver, env)
 			if err != nil {
 				return nil, errors.WithMessage(err, "eval function receiver")
@@ -137,6 +157,7 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 				return nil, errors.WithMessage(err, "eval function literal param")
 			}
 			params[i] = &object.FunctionParameter{Name: param.Name.Value, Default: def}
+			fmt.Println("function params: ", params[i])
 		}
 		body := node.Body
 		function := &object.Function{
@@ -151,6 +172,7 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 		}
 		return &object.Symbol{Value: node.Name.Value}, nil
 	case *ast.BlockExpression:
+		fmt.Println("BlockExpression:", node)
 		params := node.Parameters
 		body := node.Body
 		block := &object.Proc{
@@ -160,7 +182,10 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 		}
 		return block, nil
 	case *ast.ArrayLiteral:
+		fmt.Println("Arrayliteral:", node.Elements)
 		elements, err := evalExpressions(node.Elements, env)
+		outputArray(node.Elements, env)
+		fmt.Println("Elements:", elements)
 		if err != nil {
 			return nil, errors.WithMessage(err, "eval array literal")
 		}
@@ -180,6 +205,7 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 		}
 		return &hash, nil
 	case ast.ExpressionList:
+		fmt.Println("ExpressionList:", node)
 		var objects []object.RubyObject
 		for _, e := range node {
 			obj, err := Eval(e, env)
@@ -192,14 +218,20 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 
 	// Expressions
 	case *ast.Assignment:
+		fmt.Println("Assignment:", node)
 		right, err := Eval(node.Right, env)
 		if err != nil {
 			return nil, errors.WithMessage(err, "eval right hand Assignment side")
 		}
 
+		fmt.Println("Assignment Right:", node.Right, right)
+		fmt.Println("Assignment Left:", node.Left)
+
 		switch left := node.Left.(type) {
 		case *ast.IndexExpression:
+			fmt.Println("IndexExpression:")
 			indexLeft, err := Eval(left.Left, env)
+			fmt.Println("IndexExpressionLeft:", indexLeft)
 			if err != nil {
 				return nil, errors.WithMessage(err, "eval left hand Assignment side: eval left side of IndexExpression")
 			}
@@ -209,6 +241,7 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 			}
 			return evalIndexExpressionAssignment(indexLeft, index, expandToArrayIfNeeded(right))
 		case *ast.InstanceVariable:
+			fmt.Println("InstanceVariable:")
 			self, _ := env.Get("self")
 			selfObj := self.(*object.Self)
 			selfAsEnv, ok := selfObj.RubyObject.(object.Environment)
@@ -220,17 +253,23 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 			}
 
 			right = expandToArrayIfNeeded(right)
+			fmt.Println("InstanceVariable:", left, right)
 			selfAsEnv.Set(left.String(), right)
 			return right, nil
 		case *ast.Identifier:
+			fmt.Println("Identifier:", right)
 			right = expandToArrayIfNeeded(right)
+			appendToFile("\tenv.Set(\"" + left.Value + "\", right)")
 			env.Set(left.Value, right)
+			fmt.Println("Identifier:", left, right)
 			return right, nil
 		case *ast.Global:
+			fmt.Println("Global:")
 			right = expandToArrayIfNeeded(right)
 			env.SetGlobal(left.Value, right)
 			return right, nil
 		case ast.ExpressionList:
+			fmt.Println("ExpressionList")
 			values := []object.RubyObject{right}
 			if list, ok := right.(rubyObjects); ok {
 				values = list
@@ -318,7 +357,9 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 		env.Set(node.Name.Value, self.RubyObject)
 		return bodyReturn, nil
 	case *ast.ContextCallExpression:
+		fmt.Println("ContextCallExpression:", node)
 		context, err := Eval(node.Context, env)
+		fmt.Println("Context: ", context)
 		if err != nil {
 			return nil, errors.WithMessage(err, "eval method call receiver")
 		}
@@ -330,6 +371,7 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 			return nil, errors.WithMessage(err, "eval method call arguments")
 		}
 		if node.Block != nil {
+			fmt.Println("Block")
 			block, err := Eval(node.Block, env)
 			if err != nil {
 				return nil, errors.WithMessage(err, "eval method call block")
@@ -337,6 +379,7 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 			args = append(args, block)
 		}
 		callContext := &callContext{object.NewCallContext(env, context)}
+		fmt.Println("CallContext:", context)
 		return object.Send(callContext, node.Function.Value, args...)
 	case *ast.YieldExpression:
 		selfObject, _ := env.Get("self")
@@ -352,6 +395,7 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 		return self.Block.Call(callContext, args...)
 	case *ast.IndexExpression:
 		left, err := Eval(node.Left, env)
+		fmt.Println("IndexExpression:", left)
 		if err != nil {
 			return nil, errors.WithMessage(err, "eval IndexExpression left side")
 		}
@@ -362,6 +406,7 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 		return evalIndexExpression(left, index)
 	case *ast.PrefixExpression:
 		right, err := Eval(node.Right, env)
+		fmt.Println("PrefixExpression right", right)
 		if err != nil {
 			return nil, errors.WithMessage(err, "eval prefix right side")
 		}
@@ -435,6 +480,7 @@ func evalProgram(stmts []ast.Statement, env object.Environment) (object.RubyObje
 		if _, ok := statement.(*ast.Comment); ok {
 			continue
 		}
+
 		result, err = Eval(statement, env)
 
 		if err != nil {
@@ -447,19 +493,24 @@ func evalProgram(stmts []ast.Statement, env object.Environment) (object.RubyObje
 		}
 
 	}
+
+	endMainFunc()
 	return result, nil
 }
 
 func evalExpressions(exps []ast.Expression, env object.Environment) ([]object.RubyObject, error) {
 	var result []object.RubyObject
 
+	fmt.Println("EvalExpression:", exps)
 	for _, e := range exps {
 		evaluated, err := Eval(e, env)
+		fmt.Println("Evaluated in eval exp:", e)
 		if err != nil {
 			return nil, err
 		}
 		result = append(result, evaluated)
 	}
+	fmt.Println("eval result:", result)
 	return result, nil
 }
 
@@ -497,6 +548,7 @@ func evalMinusPrefixOperatorExpression(right object.RubyObject) (object.RubyObje
 }
 
 func evalConditionalExpression(ce *ast.ConditionalExpression, env object.Environment) (object.RubyObject, error) {
+	fmt.Println("Eval condition expr:", ce.Condition)
 	condition, err := Eval(ce.Condition, env)
 	if err != nil {
 		return nil, err
@@ -588,6 +640,7 @@ func evalBlockStatement(block *ast.BlockStatement, env object.Environment) (obje
 	var err error
 	for _, statement := range block.Statements {
 		result, err = Eval(statement, env)
+		fmt.Println("BlockSt:", statement)
 		if err != nil {
 			return nil, err
 		}
@@ -606,7 +659,9 @@ func evalBlockStatement(block *ast.BlockStatement, env object.Environment) (obje
 }
 
 func evalIdentifier(node *ast.Identifier, env object.Environment) (object.RubyObject, error) {
+	fmt.Println("EvalIdentifer:", node)
 	val, ok := env.Get(node.Value)
+	fmt.Println("EvalIdentifer val:", val)
 	if ok {
 		return val, nil
 	}
@@ -627,6 +682,7 @@ func evalIdentifier(node *ast.Identifier, env object.Environment) (object.RubyOb
 			"eval ident as method call",
 		)
 	}
+	fmt.Println("EvalIdentifer value:", val)
 	return val, nil
 }
 
@@ -722,4 +778,61 @@ func nativeBoolToBooleanObject(input bool) object.RubyObject {
 		return object.TRUE
 	}
 	return object.FALSE
+}
+
+func createMainFunc() {
+	src := `package main
+ 
+import "github.com/goruby/goruby/object"
+
+func main() { 
+	env := object.NewMainEnvironment()`
+	appendToFile(src)
+}
+
+func endMainFunc() {
+	src := `}`
+	appendToFile(src)
+}
+
+func outputInteger(value int64) {
+	src := `
+	right := object.NewInteger(` + strconv.FormatInt(value, 16) + `)`
+	appendToFile(src)
+}
+
+func outputArray(exps []ast.Expression, env object.Environment) error {
+	appendToFile(`
+	var result []object.RubyObject`)
+
+	for _, e := range exps {
+		appendToFile(``)
+		evaluated, err := Eval(e, env)
+		evalString := fmt.Sprintf("%v", e)
+		fmt.Println("Evaluated within write ---:", reflect.TypeOf(evaluated), reflect.TypeOf(e))
+
+		if err != nil {
+			return err
+		}
+		appendToFile(`
+	result = append(result, &object.String{Value:"` + evalString + `"})`)
+	}
+	src := `
+	right := &object.Array{Elements: result}`
+	appendToFile(src)
+	return nil
+}
+
+func appendToFile(content string) {
+	f, err := os.OpenFile("compiled.go", os.O_APPEND|os.O_WRONLY, 0600)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer f.Close()
+
+	if _, err = f.WriteString(content + "\n"); err != nil {
+		panic(err)
+	}
 }

@@ -280,7 +280,9 @@ func (tok Type) IsOperator() bool { return operator_beg < tok && tok < operator_
 // IsAssignOperator returns true for tokens corresponding to assignment
 // operators and delimiters; it returns false otherwise.
 //
-func (tok Type) IsAssignOperator() bool { return operator_assign_beg < tok && tok < operator_assign_end }
+func (tok Type) IsAssignOperator() bool {
+	return operator_assign_beg < tok && tok < operator_assign_end
+}
 
 // IsKeyword returns true for tokens corresponding to keywords;
 // it returns false otherwise.
