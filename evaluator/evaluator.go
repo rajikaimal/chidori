@@ -43,6 +43,7 @@ func expandToArrayIfNeeded(obj object.RubyObject) object.RubyObject {
 }
 
 var file, err = os.Create("compiled.go")
+var variableCount = 0
 
 // Eval evaluates the given node and traverses recursive over its children
 func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
@@ -69,8 +70,8 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 	// Literals
 	case (*ast.IntegerLiteral):
 		fmt.Println("----- IntegerLiteral:", node.Value)
-		outputInteger(node.Value)
-		return object.NewInteger(node.Value), nil
+		return outputInteger(node.Value), nil
+		//return object.NewInteger(node.Value), nil
 	case (*ast.Boolean):
 		return nativeBoolToBooleanObject(node.Value), nil
 	case (*ast.Nil):
@@ -100,7 +101,7 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 		return val, nil
 	case *ast.Identifier:
 		fmt.Println("Identifier:", node)
-		outputGetIdentifier(node.Value)
+		outputGetIdentifier(node)
 		return evalIdentifier(node, env)
 	case *ast.Global:
 		val, ok := env.Get(node.Value)
@@ -110,7 +111,8 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 		return val, nil
 	case *ast.StringLiteral:
 		fmt.Println("StringLiteral:", node)
-		return &object.String{Value: node.Value}, nil
+		return outputString(node.Value), nil
+		//return &object.String{Value: node.Value}, nil
 	case *ast.SymbolLiteral:
 		fmt.Println("SymbolLiteral:", node)
 		switch value := node.Value.(type) {
@@ -184,13 +186,12 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 		return block, nil
 	case *ast.ArrayLiteral:
 		fmt.Println("Arrayliteral:", node.Elements)
-		elements, err := evalExpressions(node.Elements, env)
-		outputArray(node.Elements, env)
-		fmt.Println("Elements:", elements)
+		//elements, err := evalExpressions(node.Elements, env)
+		variableName, err := outputArray(node.Elements, env)
 		if err != nil {
-			return nil, errors.WithMessage(err, "eval array literal")
+			return nil, errors.WithMessage(err, "Output array is nil")
 		}
-		return &object.Array{Elements: elements}, nil
+		return &object.String{Value: variableName}, nil
 	case *ast.HashLiteral:
 		var hash object.Hash
 		for k, v := range node.Map {
@@ -260,8 +261,9 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 		case *ast.Identifier:
 			fmt.Println("Here setting Identifier:", left, right)
 			right = expandToArrayIfNeeded(right)
-			//outputValue(node.Right)
-			appendToFile("\tenv.Set(\"" + left.Value + "\", right)")
+			fmt.Println("LEFT RIGHT", left, right)
+			outputValue(left.Value, right)
+			//appendToFile("\tenv.Set(\"" + left.Value + "\", right)")
 			env.Set(left.Value, right)
 			fmt.Println("Identifier:", left, right)
 			return right, nil
@@ -503,8 +505,9 @@ func evalProgram(stmts []ast.Statement, env object.Environment) (object.RubyObje
 func evalExpressions(exps []ast.Expression, env object.Environment) ([]object.RubyObject, error) {
 	var result []object.RubyObject
 
-	fmt.Println("EvalExpression:", exps)
+	fmt.Println("EvalExpression: ", exps)
 	for _, e := range exps {
+		fmt.Println("Inside loop")
 		evaluated, err := Eval(e, env)
 		fmt.Println("Evaluated in eval exp:", e)
 		if err != nil {
@@ -798,45 +801,66 @@ func endMainFunc() {
 	appendToFile(src)
 }
 
-func outputValue(value string) {
-	src := `
-	right := object.NewInteger(` + value + `)`
-	appendToFile(src)
+func outputValue(value string, right object.RubyObject) {
+	appendToFile("\tenv.Set(\"" + value + "\", " + right.Inspect() + ")")
 }
 
-func outputInteger(value int64) {
+func outputInteger(value int64) object.RubyObject {
+	fmt.Println("********** Writing integer")
+	newVar := getNewVariableName()
 	src := `
-	right := object.NewInteger(` + strconv.FormatInt(value, 16) + `)`
+	` + newVar + ` := object.NewInteger(` + strconv.FormatInt(int64(value), 10) + `)`
 	appendToFile(src)
+	stringObj := &object.String{Value: newVar}
+	return stringObj
 }
 
-func outputGetIdentifier(identifierName string) {
+func outputString(value string) object.RubyObject {
+	fmt.Println("********** Writing string")
+	newVar := getNewVariableName()
+	src := `
+	` + newVar + ` := &object.String{Value:"` + value + `"}`
+	appendToFile(src)
+	stringObj := &object.String{Value: newVar}
+	return stringObj
+}
+
+func outputGetIdentifier(node ast.Node) {
 	//TODO: Don't disregard ok
-	src := "\tval, _ := env.Get(\"" + identifierName + "\") \n"
-	src = src + "\tfmt.Println(val)"
+	src := "\t" + node.String() + ", _ := env.Get(\"" + node.String() + "\") \n"
+	src = src + "\tfmt.Println(" + node.String() + ")"
 	appendToFile(src)
 }
 
-func outputArray(exps []ast.Expression, env object.Environment) error {
+func outputArray(exps []ast.Expression, env object.Environment) (string, error) {
 	appendToFile(`
 	var result []object.RubyObject`)
 
 	for _, e := range exps {
-		appendToFile(``)
 		evaluated, err := Eval(e, env)
-		evalString := fmt.Sprintf("%v", e)
-		fmt.Println("Evaluated within write ---:", reflect.TypeOf(evaluated), reflect.TypeOf(e))
+		//evalString := fmt.Sprintf("%v", e)
+		fmt.Println("Evaluated within write ---:", evaluated, reflect.TypeOf(evaluated), reflect.ValueOf(e))
 
 		if err != nil {
-			return err
+			return "", err
 		}
 		appendToFile(`
-	result = append(result, &object.String{Value:"` + evalString + `"})`)
+	result = append(result, ` + fmt.Sprintf("v%v", variableCount) + `)`)
+
+		//appendToFile(`
+		//result = append(result, &object.String{Value:"` + evalString + `"})`)
 	}
+	newVar := getNewVariableName()
 	src := `
-	right := &object.Array{Elements: result}`
+	` + newVar + ` := &object.Array{Elements: result}`
 	appendToFile(src)
-	return nil
+	return newVar, nil
+}
+
+func getNewVariableName() string {
+	variableCount = variableCount + 1
+
+	return "v" + strconv.Itoa(variableCount)
 }
 
 func appendToFile(content string) {
