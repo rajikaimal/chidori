@@ -44,6 +44,7 @@ func expandToArrayIfNeeded(obj object.RubyObject) object.RubyObject {
 
 var file, err = os.Create("compiled.go")
 var variableCount = 0
+var arrayIdentifierCount = 0
 
 // Eval evaluates the given node and traverses recursive over its children
 func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
@@ -362,6 +363,9 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 		return bodyReturn, nil
 	case *ast.ContextCallExpression:
 		fmt.Println("ContextCallExpression:", node)
+		if strings.Contains(node.String(), "append") {
+			return nil, errors.WithMessage(nil, "appending to array is not supported")
+		}
 		context, err := Eval(node.Context, env)
 		fmt.Println("Context: ", context)
 		if err != nil {
@@ -827,32 +831,31 @@ func outputString(value string) object.RubyObject {
 func outputGetIdentifier(node ast.Node) {
 	//TODO: Don't disregard ok
 	src := "\t" + node.String() + ", _ := env.Get(\"" + node.String() + "\") \n"
-	src = src + "\tfmt.Println(" + node.String() + ")"
+	src = src + "\tfmt.Println(" + node.String() + ".Inspect())"
 	appendToFile(src)
 }
 
 func outputArray(exps []ast.Expression, env object.Environment) (string, error) {
-	appendToFile(`
-	var result []object.RubyObject`)
+	var arrayIdentifiers []string
 
 	for _, e := range exps {
 		evaluated, err := Eval(e, env)
-		//evalString := fmt.Sprintf("%v", e)
 		fmt.Println("Evaluated within write ---:", evaluated, reflect.TypeOf(evaluated), reflect.ValueOf(e))
 
 		if err != nil {
 			return "", err
 		}
 
-		appendToFile(`
-	result = append(result, ` + evaluated.Inspect() + `)`)
-
-		//appendToFile(`
-		//result = append(result, &object.String{Value:"` + evalString + `"})`)
+		arrayIdentifiers = append(arrayIdentifiers, evaluated.Inspect())
 	}
+
+	rubyObjVariables := strings.Join(arrayIdentifiers, ",")
+	internalIdentifier := getArrayIdentifer()
+	appendToFile("\t" + internalIdentifier + ":= []object.RubyObject{" + rubyObjVariables + "}")
+
 	newVar := getNewVariableName()
 	src := `
-	` + newVar + ` := &object.Array{Elements: result}`
+	` + newVar + ` := &object.Array{Elements: ` + internalIdentifier + `}`
 	appendToFile(src)
 	return newVar, nil
 }
@@ -861,6 +864,12 @@ func getNewVariableName() string {
 	variableCount = variableCount + 1
 
 	return "v" + strconv.Itoa(variableCount)
+}
+
+func getArrayIdentifer() string {
+	arrayIdentifierCount = arrayIdentifierCount + 1
+
+	return "res" + strconv.Itoa(arrayIdentifierCount)
 }
 
 func appendToFile(content string) {
