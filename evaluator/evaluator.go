@@ -789,7 +789,6 @@ func createMainFunc() {
 	src := `package main
  
 import "github.com/goruby/goruby/object"
-import "fmt"
 
 func main() { 
 	env := object.NewMainEnvironment()`
@@ -844,8 +843,9 @@ func outputArray(exps []ast.Expression, env object.Environment) (string, error) 
 		if err != nil {
 			return "", err
 		}
+
 		appendToFile(`
-	result = append(result, ` + fmt.Sprintf("v%v", variableCount) + `)`)
+	result = append(result, ` + evaluated.Inspect() + `)`)
 
 		//appendToFile(`
 		//result = append(result, &object.String{Value:"` + evalString + `"})`)
