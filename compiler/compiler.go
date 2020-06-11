@@ -5,12 +5,12 @@ import (
 	"log"
 	"os"
 
-	"github.com/goruby/goruby/evaluator"
+	"github.com/goruby/goruby/generator"
 	"github.com/goruby/goruby/object"
 	"github.com/goruby/goruby/parser"
 )
 
-// Interpreter defines the methods of an interpreter
+// Compiler defines the methods of an compiler
 type Compiler interface {
 	Compile(filename string, input interface{}) (object.RubyObject, error)
 }
@@ -39,5 +39,5 @@ func (i *compiler) Compile(filename string, input interface{}) (object.RubyObjec
 	if err != nil {
 		return nil, object.NewSyntaxError(err)
 	}
-	return evaluator.Eval(node, i.environment)
+	return generator.Generate(node, i.environment)
 }
