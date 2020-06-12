@@ -34,10 +34,10 @@ type compiler struct {
 	environment object.Environment
 }
 
-func (i *compiler) Compile(filename string, input interface{}) (object.RubyObject, error) {
+func (c *compiler) Compile(filename string, input interface{}) (object.RubyObject, error) {
 	node, err := parser.ParseFile(token.NewFileSet(), filename, input, 0)
 	if err != nil {
 		return nil, object.NewSyntaxError(err)
 	}
-	return generator.Generate(node, i.environment)
+	return generator.Generate(node, c.environment)
 }
