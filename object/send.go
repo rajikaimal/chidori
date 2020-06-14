@@ -1,6 +1,7 @@
 package object
 
 import (
+	"fmt"
 	"github.com/pkg/errors"
 )
 
@@ -9,6 +10,7 @@ func Send(context CallContext, method string, args ...RubyObject) (RubyObject, e
 	receiver := context.Receiver()
 	class := receiver.Class()
 
+	fmt.Println("METHOD", method)
 	// search for the method in the ancestry tree
 	for class != nil {
 		fn, ok := class.Methods().Get(method)

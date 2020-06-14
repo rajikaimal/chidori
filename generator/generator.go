@@ -44,6 +44,7 @@ func expandToArrayIfNeeded(obj object.RubyObject) object.RubyObject {
 
 var file, err = os.Create("compiled.go")
 var variableCount = 0
+var existingArrays = make(map[string]string)
 
 // Eval evaluates the given node and traverses recursive over its children
 func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) {
@@ -64,7 +65,7 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		}
 		return &object.ReturnValue{Value: val}, nil
 	case *ast.BlockStatement:
-		fmt.Println("BlockStatment:", node)
+		fmt.Println("/////////// BlockStatment:", node.Statements, node, node.End(), node.Pos(), node.EndToken)
 		return evalBlockStatement(node, env)
 
 	// Literals
@@ -82,6 +83,7 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 	case (*ast.Keyword__FILE__):
 		return &object.String{Value: node.Filename}, nil
 	case (*ast.InstanceVariable):
+		fmt.Println("InstanceVariable", node)
 		self, _ := env.Get("self")
 		selfObj := self.(*object.Self)
 		selfAsEnv, ok := selfObj.RubyObject.(object.Environment)
@@ -104,6 +106,7 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		outputGetIdentifier(node)
 		return evalIdentifier(node, env)
 	case *ast.Global:
+		fmt.Println("Global", node)
 		val, ok := env.Get(node.Value)
 		if !ok {
 			return object.NIL, nil
@@ -185,14 +188,15 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		}
 		return block, nil
 	case *ast.ArrayLiteral:
-		fmt.Println("Arrayliteral:", node.Elements)
+		fmt.Println("Arrayliteral:", node, node.Elements, node.String())
 		//elements, err := evalExpressions(node.Elements, env)
-		variableName, err := outputArray(node.Elements, env)
+		variableName, err := outputArray(node.Elements, env, node.String())
 		if err != nil {
 			return nil, errors.WithMessage(err, "Output array is nil")
 		}
 		return &object.String{Value: variableName}, nil
 	case *ast.HashLiteral:
+		fmt.Println("HashLiteral:")
 		var hash object.Hash
 		for k, v := range node.Map {
 			key, err := Generate(k, env)
@@ -220,8 +224,9 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 
 	// Expressions
 	case *ast.Assignment:
-		fmt.Println("Assignment:", node)
+		fmt.Println("Assignment here:", node)
 		right, err := Generate(node.Right, env)
+		fmt.Println("After generating assignment:", right)
 		if err != nil {
 			return nil, errors.WithMessage(err, "eval right hand Assignment side")
 		}
@@ -320,6 +325,7 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 			)
 		}
 	case *ast.ModuleExpression:
+		fmt.Println("ModuleExpression:")
 		module, ok := env.Get(node.Name.Value)
 		if !ok {
 			module = object.NewModule(node.Name.Value, env)
@@ -335,6 +341,7 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		env.Set(node.Name.Value, self.RubyObject)
 		return bodyReturn, nil
 	case *ast.ClassExpression:
+		fmt.Println("ClassExpression", node)
 		superClassName := "Object"
 		if node.SuperClass != nil {
 			superClassName = node.SuperClass.Value
@@ -362,6 +369,9 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		return bodyReturn, nil
 	case *ast.ContextCallExpression:
 		fmt.Println("ContextCallExpression:", node)
+		//TODO: Support methods
+
+		outputContextCalls(node)
 		context, err := Generate(node.Context, env)
 		fmt.Println("Context: ", context)
 		if err != nil {
@@ -386,6 +396,7 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		fmt.Println("CallContext:", context)
 		return object.Send(callContext, node.Function.Value, args...)
 	case *ast.YieldExpression:
+		fmt.Println("YieldExpression:", node)
 		selfObject, _ := env.Get("self")
 		self := selfObject.(*object.Self)
 		if self.Block == nil {
@@ -398,6 +409,7 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		callContext := &callContext{object.NewCallContext(env, self)}
 		return self.Block.Call(callContext, args...)
 	case *ast.IndexExpression:
+		fmt.Println("IndexExpression:", node)
 		left, err := Generate(node.Left, env)
 		fmt.Println("IndexExpression:", left)
 		if err != nil {
@@ -409,6 +421,7 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		}
 		return evalIndexExpression(left, index)
 	case *ast.PrefixExpression:
+		fmt.Println("PrefixExpression:", node)
 		right, err := Generate(node.Right, env)
 		fmt.Println("PrefixExpression right", right)
 		if err != nil {
@@ -416,7 +429,9 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		}
 		return evalPrefixExpression(node.Operator, right)
 	case *ast.InfixExpression:
+		fmt.Println("InfixExpression:", node)
 		left, err := Generate(node.Left, env)
+		fmt.Println("InfixExpression generated:", left)
 		if err != nil {
 			return nil, errors.WithMessage(err, "eval operator left side")
 		}
@@ -425,18 +440,43 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 			return left, nil
 		}
 
+		fmt.Println("Generating right >>>>>", node.Operator)
+
 		right, err := Generate(node.Right, env)
+
+		fmt.Println("RIGHT INFIX", node.Right, node.Left)
+		if node.Operator == ">" || node.Operator == "<" {
+			generatedCondition := outputInfixIdentifers(node.Right, node.Left, node.Operator)
+
+			if len(generatedCondition) > 0 {
+				fmt.Println("Returning loop", generatedCondition)
+				return &object.String{Value: generatedCondition}, nil
+			}
+
+		}
+		fmt.Println("Right infix generated:", right)
 		if err != nil {
 			return nil, errors.WithMessage(err, "eval operator right side")
 		}
+
 		if node.IsControlExpression() {
+			fmt.Println("ControlExpression")
 			return right, nil
 		}
+
+		if node.Operator == "+" {
+			identifier := outputInfixString(left, node.Left, right)
+			return &object.String{Value: identifier}, nil
+		}
 		context := &callContext{object.NewCallContext(env, left)}
-		return object.Send(context, node.Operator, right)
+		fmt.Println("CONTEXT ________", context)
+		return &object.String{Value: right.Inspect()}, nil
+		//return object.Send(context, node.Operator, right)
 	case *ast.ConditionalExpression:
+		fmt.Println("ConditionalExpression:", node)
 		return evalConditionalExpression(node, env)
 	case *ast.ScopedIdentifier:
+		fmt.Println("ScopedIdentifier:", node)
 		self, _ := env.Get("self")
 		outer, ok := env.Get(node.Outer.Value)
 		if !ok {
@@ -458,6 +498,7 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		}
 		return inner, nil
 	case *ast.ExceptionHandlingBlock:
+		fmt.Println("ExceptionHandlingBlock", node)
 		bodyReturn, err := Generate(node.TryBody, env)
 		if err == nil {
 			return bodyReturn, nil
@@ -468,6 +509,16 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		// ignore comments
 		return nil, nil
 
+	case *ast.LoopExpression:
+		fmt.Println("While loop", node.Condition, node.Block)
+		outputForLoop(node.Condition, env)
+		ret, err := Generate(node.Block, env)
+		fmt.Println("__________________")
+		outputLoopEnd()
+		if err == nil {
+			return ret, nil
+		}
+		return nil, nil
 	case nil:
 		return nil, nil
 	default:
@@ -641,6 +692,7 @@ func evalHashIndexExpression(hash *object.Hash, index object.RubyObject) object.
 }
 
 func evalBlockStatement(block *ast.BlockStatement, env object.Environment) (object.RubyObject, error) {
+	fmt.Println(block)
 	var result object.RubyObject
 	var err error
 	for _, statement := range block.Statements {
@@ -664,9 +716,9 @@ func evalBlockStatement(block *ast.BlockStatement, env object.Environment) (obje
 }
 
 func evalIdentifier(node *ast.Identifier, env object.Environment) (object.RubyObject, error) {
-	fmt.Println("EvalIdentifer:", node)
+	fmt.Println(".ValueEvalIdentifer:", node)
 	val, ok := env.Get(node.Value)
-	fmt.Println("EvalIdentifer val:", val)
+	fmt.Println("EvalIdentifer val:", val, ok)
 	if ok {
 		return val, nil
 	}
@@ -805,8 +857,8 @@ func outputValue(value string, right object.RubyObject) {
 }
 
 func outputInteger(value int64) object.RubyObject {
-	fmt.Println("********** Writing integer")
 	newVar := getNewVariableName()
+	fmt.Println("********** Writing integer", newVar)
 	src := `
 	` + newVar + ` := object.NewInteger(` + strconv.FormatInt(int64(value), 10) + `)`
 	appendToFile(src)
@@ -827,14 +879,16 @@ func outputString(value string) object.RubyObject {
 func outputGetIdentifier(node ast.Node) {
 	//TODO: Don't disregard ok
 	src := "\t" + node.String() + ", _ := env.Get(\"" + node.String() + "\") \n"
-	src = src + "\tfmt.Println(" + node.String() + ")"
+	//src = src + "\tfmt.Println(" + node.String() + ")"
 	appendToFile(src)
 }
 
-func outputArray(exps []ast.Expression, env object.Environment) (string, error) {
-	appendToFile(`
+func outputArray(exps []ast.Expression, env object.Environment, identifier string) (string, error) {
+	exists := existingArrays[identifier]
+	if len(exists) == 0 {
+		appendToFile(`
 	var result []object.RubyObject`)
-
+	}
 	for _, e := range exps {
 		evaluated, err := Generate(e, env)
 		//evalString := fmt.Sprintf("%v", e)
@@ -855,6 +909,61 @@ func outputArray(exps []ast.Expression, env object.Environment) (string, error) 
 	` + newVar + ` := &object.Array{Elements: result}`
 	appendToFile(src)
 	return newVar, nil
+}
+
+func outputForLoop(condition ast.Expression, env object.Environment) error {
+	generatedCondition, _ := Generate(condition, env)
+	fmt.Println("AJKDSLDJSDALD", generatedCondition)
+	src := `
+	for ` + generatedCondition.Inspect() + ` {
+	`
+	appendToFile(src)
+	return nil
+}
+
+func outputInfixIdentifers(right ast.Node, left ast.Node, operator string) string {
+	appendToFile(`
+	` + right.String() + `Val, _ := ` + right.String() + `.(*object.Integer)
+	`)
+	appendToFile(`
+	` + left.String() + `Val, _ := ` + left.String() + `.(*object.Integer)
+	`)
+
+	return left.String() + "Val.Value" + operator + right.String() + "Val.Value"
+}
+
+func outputLoopEnd() {
+	src := "}"
+
+	appendToFile(src)
+}
+
+func outputInfixString(left object.RubyObject, nLeft ast.Expression, right object.RubyObject) string {
+	identifier := getNewVariableName()
+	fmt.Println("Output Infix op:", left.Inspect(), right.Inspect())
+
+	isInt := left.Type()
+
+	fmt.Println("Is it Int", isInt)
+
+	if true {
+		appendToFile("\t" + identifier + " := " + left.Inspect() + ".Value +" + right.Inspect() + ".Value")
+
+		return "&object.Integer{ Value:" + identifier + "}"
+	} else {
+		appendToFile("\t" + identifier + " := " + left.Inspect() + ".Inspect() +" + right.Inspect() + ".Value")
+		return "&object.String{ Value:" + identifier + "}"
+	}
+
+}
+
+func outputContextCalls(node ast.Node) {
+	nodeVal := node.String()
+	fmt.Println(nodeVal)
+
+	if strings.Contains(nodeVal, "puts") {
+		appendToFile("fmt.Println(" + nodeVal + ")")
+	}
 }
 
 func getNewVariableName() string {
