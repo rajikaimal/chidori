@@ -39,6 +39,7 @@ func expandToArrayIfNeeded(obj object.RubyObject) object.RubyObject {
 	if !ok {
 		return obj
 	}
+
 	return object.NewArray(arr...)
 }
 
@@ -429,7 +430,7 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		}
 		return evalPrefixExpression(node.Operator, right)
 	case *ast.InfixExpression:
-		fmt.Println("InfixExpression:", node)
+		fmt.Println(">>>>>>> InfixExpression:", node)
 		left, err := Generate(node.Left, env)
 		fmt.Println("InfixExpression generated:", left)
 		if err != nil {
@@ -913,7 +914,6 @@ func outputArray(exps []ast.Expression, env object.Environment, identifier strin
 
 func outputForLoop(condition ast.Expression, env object.Environment) error {
 	generatedCondition, _ := Generate(condition, env)
-	fmt.Println("AJKDSLDJSDALD", generatedCondition)
 	src := `
 	for ` + generatedCondition.Inspect() + ` {
 	`
@@ -940,14 +940,16 @@ func outputLoopEnd() {
 
 func outputInfixString(left object.RubyObject, nLeft ast.Expression, right object.RubyObject) string {
 	identifier := getNewVariableName()
-	fmt.Println("Output Infix op:", left.Inspect(), right.Inspect())
+	fmt.Println("Output Infix op:", left.Type(), right.Inspect())
+	leftVal := left.(*object.String)
+	isInt := leftVal
 
-	isInt := left.Type()
-
-	fmt.Println("Is it Int", isInt)
+	fmt.Println("Is it Int:", isInt, left.Inspect())
 
 	if true {
-		appendToFile("\t" + identifier + " := " + left.Inspect() + ".Value +" + right.Inspect() + ".Value")
+		appendToFile("\t" + nLeft.String() + "Val_ := " + nLeft.String() + ".(*object.Integer)")
+		appendToFile("\t" + nLeft.String() + "Val = " + nLeft.String() + "Val_")
+		appendToFile("\t" + identifier + " := " + nLeft.String() + "Val_.Value +" + right.Inspect() + ".Value")
 
 		return "&object.Integer{ Value:" + identifier + "}"
 	} else {
