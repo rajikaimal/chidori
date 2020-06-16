@@ -68,9 +68,8 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 	case *ast.BlockStatement:
 		fmt.Println("/////////// BlockStatment:", node.Statements, node, node.End(), node.Pos(), node.EndToken)
 		return evalBlockStatement(node, env)
-
-	// Literals
 	case (*ast.IntegerLiteral):
+		// Literals
 		fmt.Println("----- IntegerLiteral:", node.Value)
 		return outputInteger(node.Value), nil
 		//return object.NewInteger(node.Value), nil
@@ -342,7 +341,8 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		env.Set(node.Name.Value, self.RubyObject)
 		return bodyReturn, nil
 	case *ast.ClassExpression:
-		fmt.Println("ClassExpression", node)
+		fmt.Println("ClassExpression:", node.Name.Value)
+		outputClassExpression(node, env)
 		superClassName := "Object"
 		if node.SuperClass != nil {
 			superClassName = node.SuperClass.Value
@@ -698,7 +698,7 @@ func evalBlockStatement(block *ast.BlockStatement, env object.Environment) (obje
 	var err error
 	for _, statement := range block.Statements {
 		result, err = Generate(statement, env)
-		fmt.Println("BlockSt:", statement)
+		fmt.Println("BlockSt:", statement, statement.String())
 		if err != nil {
 			return nil, err
 		}
@@ -956,7 +956,55 @@ func outputInfixString(left object.RubyObject, nLeft ast.Expression, right objec
 		appendToFile("\t" + identifier + " := " + left.Inspect() + ".Inspect() +" + right.Inspect() + ".Value")
 		return "&object.String{ Value:" + identifier + "}"
 	}
+}
 
+func outputClassExpression(nodeVal ast.Node, env object.Environment) error {
+	node := nodeVal.(*ast.ClassExpression)
+	fmt.Println("ClassExpressionFunc:", node.Name.Value)
+	src := `
+	superClassName := "Object"
+	`
+	if node.SuperClass != nil {
+		src = src + `superClassName = ` + node.SuperClass.Value
+	}
+	src = src + `
+	superClass, ok := env.Get(superClassName)
+	class, ok := env.Get("` + node.Name.Value + `")
+	if !ok {
+		class = object.NewClass("` + node.Name.Value + `", superClass.(object.RubyClassObject), env)
+	}
+	classEnv := class.(object.Environment)
+	classEnv.Set("self", &object.Self{RubyObject: class, Name: "` + node.Name.Value + `"})
+	`
+	superClassName := "Object"
+	if node.SuperClass != nil {
+		superClassName = node.SuperClass.Value
+	}
+	superClass, ok := env.Get(superClassName)
+	if !ok {
+		return errors.Wrap(
+			object.NewUninitializedConstantNameError(superClassName),
+			"eval class superclass",
+		)
+	}
+	class, ok := env.Get(node.Name.Value)
+	if !ok {
+		class = object.NewClass(node.Name.Value, superClass.(object.RubyClassObject), env)
+	}
+	classEnv := class.(object.Environment)
+	classEnv.Set("self", &object.Self{RubyObject: class, Name: node.Name.Value})
+	_, err := Generate(node.Body, classEnv)
+
+	if err != nil {
+		return errors.WithMessage(err, "eval class body")
+	}
+	src = src + `
+	selfObject, _ := classEnv.Get("self")
+	self := selfObject.(*object.Self)
+	env.Set("` + node.Name.Value + `", self.RubyObject)
+	`
+	appendToFile(src)
+	return nil
 }
 
 func outputContextCalls(node ast.Node) {
