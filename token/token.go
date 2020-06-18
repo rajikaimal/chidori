@@ -200,6 +200,10 @@ func (tok Type) String() string {
 	return s
 }
 
+func (tok Type) Value() int {
+	return int(tok)
+}
+
 var keywords map[string]Type
 
 func init() {

@@ -67,6 +67,7 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		return &object.ReturnValue{Value: val}, nil
 	case *ast.BlockStatement:
 		fmt.Println("/////////// BlockStatment:", node.Statements, node, node.End(), node.Pos(), node.EndToken)
+		fmt.Println("BLOCK ENV", env)
 		return evalBlockStatement(node, env)
 	case (*ast.IntegerLiteral):
 		// Literals
@@ -74,16 +75,19 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		return outputInteger(node.Value), nil
 		//return object.NewInteger(node.Value), nil
 	case (*ast.Boolean):
+		fmt.Println("Boolean")
 		return nativeBoolToBooleanObject(node.Value), nil
 	case (*ast.Nil):
+		fmt.Println("Nil value:")
 		return object.NIL, nil
 	case (*ast.Self):
+		fmt.Println("Returning self:")
 		self, _ := env.Get("self")
 		return self, nil
 	case (*ast.Keyword__FILE__):
 		return &object.String{Value: node.Filename}, nil
 	case (*ast.InstanceVariable):
-		fmt.Println("InstanceVariable", node)
+		fmt.Println("~~~~~~~~~~~~ InstanceVariable", node)
 		self, _ := env.Get("self")
 		selfObj := self.(*object.Self)
 		selfAsEnv, ok := selfObj.RubyObject.(object.Environment)
@@ -103,7 +107,6 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		return val, nil
 	case *ast.Identifier:
 		fmt.Println("Identifier:", node)
-		outputGetIdentifier(node)
 		return evalIdentifier(node, env)
 	case *ast.Global:
 		fmt.Println("Global", node)
@@ -141,10 +144,13 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		}
 	case *ast.FunctionLiteral:
 		fmt.Println("FunctionLiteral:", node, node.Receiver)
+		outputFunction(node, env)
 		context, _ := env.Get("self")
+		fmt.Println("function context", context.Inspect())
 		_, inClassOrModule := context.(*object.Self).RubyObject.(object.Environment)
+		fmt.Println("Node reciever in function", node.Receiver)
 		if node.Receiver != nil {
-			fmt.Println("FunctionLiteral Reciever: ", node.Receiver)
+			fmt.Println("FunctionLiteral Reciever is not empty: ", node.Receiver)
 			rec, err := Generate(node.Receiver, env)
 			if err != nil {
 				return nil, errors.WithMessage(err, "eval function receiver")
@@ -156,9 +162,12 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 				context = context.Class().(object.RubyClassObject)
 			}
 		}
+		//function parameters slice
 		params := make([]*object.FunctionParameter, len(node.Parameters))
 		for i, param := range node.Parameters {
+			fmt.Println("Looping params", param.String())
 			def, err := Generate(param.Default, env)
+			fmt.Println("After generating param", def, err)
 			if err != nil {
 				return nil, errors.WithMessage(err, "eval function literal param")
 			}
@@ -176,6 +185,7 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 			envInfo, _ := object.EnvStat(env, context)
 			envInfo.Env().Set(node.Receiver.Value, extended)
 		}
+		fmt.Println("Returning from function params")
 		return &object.Symbol{Value: node.Name.Value}, nil
 	case *ast.BlockExpression:
 		fmt.Println("BlockExpression:", node)
@@ -266,7 +276,7 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		case *ast.Identifier:
 			fmt.Println("Here setting Identifier:", left, right)
 			right = expandToArrayIfNeeded(right)
-			fmt.Println("LEFT RIGHT", left, right)
+			fmt.Println("LEFT RIGHT", left, left.Value, right)
 			outputValue(left.Value, right)
 			//appendToFile("\tenv.Set(\"" + left.Value + "\", right)")
 			env.Set(left.Value, right)
@@ -343,38 +353,14 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 	case *ast.ClassExpression:
 		fmt.Println("ClassExpression:", node.Name.Value)
 		outputClassExpression(node, env)
-		superClassName := "Object"
-		if node.SuperClass != nil {
-			superClassName = node.SuperClass.Value
-		}
-		superClass, ok := env.Get(superClassName)
-		if !ok {
-			return nil, errors.Wrap(
-				object.NewUninitializedConstantNameError(superClassName),
-				"eval class superclass",
-			)
-		}
-		class, ok := env.Get(node.Name.Value)
-		if !ok {
-			class = object.NewClass(node.Name.Value, superClass.(object.RubyClassObject), env)
-		}
-		classEnv := class.(object.Environment)
-		classEnv.Set("self", &object.Self{RubyObject: class, Name: node.Name.Value})
-		bodyReturn, err := Generate(node.Body, classEnv)
-		if err != nil {
-			return nil, errors.WithMessage(err, "eval class body")
-		}
-		selfObject, _ := classEnv.Get("self")
-		self := selfObject.(*object.Self)
-		env.Set(node.Name.Value, self.RubyObject)
-		return bodyReturn, nil
+		return nil, nil
 	case *ast.ContextCallExpression:
 		fmt.Println("ContextCallExpression:", node)
 		//TODO: Support methods
 
 		outputContextCalls(node)
 		context, err := Generate(node.Context, env)
-		fmt.Println("Context: ", context)
+		fmt.Println("Context: ", context, err)
 		if err != nil {
 			return nil, errors.WithMessage(err, "eval method call receiver")
 		}
@@ -395,7 +381,9 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		}
 		callContext := &callContext{object.NewCallContext(env, context)}
 		fmt.Println("CallContext:", context)
-		return object.Send(callContext, node.Function.Value, args...)
+		a, b := object.Send(callContext, node.Function.Value, args...)
+		fmt.Println("After callcontext:", a, b)
+		return a, b
 	case *ast.YieldExpression:
 		fmt.Println("YieldExpression:", node)
 		selfObject, _ := env.Get("self")
@@ -539,6 +527,7 @@ func evalProgram(stmts []ast.Statement, env object.Environment) (object.RubyObje
 
 		result, err = Generate(statement, env)
 
+		fmt.Println("Eval program errors:", err)
 		if err != nil {
 			return nil, errors.WithMessage(err, "eval program statement")
 		}
@@ -693,12 +682,13 @@ func evalHashIndexExpression(hash *object.Hash, index object.RubyObject) object.
 }
 
 func evalBlockStatement(block *ast.BlockStatement, env object.Environment) (object.RubyObject, error) {
-	fmt.Println(block)
+	fmt.Println("Block here ...", block)
 	var result object.RubyObject
 	var err error
 	for _, statement := range block.Statements {
+		fmt.Println("Block statement:", statement.String())
 		result, err = Generate(statement, env)
-		fmt.Println("BlockSt:", statement, statement.String())
+		fmt.Println("BlockSt ---- :", statement, statement.String())
 		if err != nil {
 			return nil, err
 		}
@@ -717,31 +707,31 @@ func evalBlockStatement(block *ast.BlockStatement, env object.Environment) (obje
 }
 
 func evalIdentifier(node *ast.Identifier, env object.Environment) (object.RubyObject, error) {
-	fmt.Println(".ValueEvalIdentifer:", node)
-	val, ok := env.Get(node.Value)
-	fmt.Println("EvalIdentifer val:", val, ok)
-	if ok {
-		return val, nil
-	}
+	fmt.Println("ValueEvalIdentifer:", node)
+	//val, ok := env.Get(node.Value)
+	outputGetIdentifier(node)
+	fmt.Println("EvalIdentifer val:")
 
-	if node.IsConstant() {
-		return nil, errors.Wrap(
-			object.NewUninitializedConstantNameError(node.Value),
-			"eval identifier",
-		)
-	}
+	//TODO
+	//if node.IsConstant() {
+	//	fmt.Println("EvalIdentifer node is constant")
+	//	return nil, errors.Wrap(
+	//		object.NewUninitializedConstantNameError(node.Value),
+	//		"eval identifier",
+	//	)
+	//}
 
-	self, _ := env.Get("self")
-	context := &callContext{object.NewCallContext(env, self)}
-	val, err := object.Send(context, node.Value)
-	if err != nil {
-		return nil, errors.Wrap(
-			object.NewUndefinedLocalVariableOrMethodNameError(self, node.Value),
-			"eval ident as method call",
-		)
-	}
-	fmt.Println("EvalIdentifer value:", val)
-	return val, nil
+	//self, _ := env.Get("self")
+	//context := &callContext{object.NewCallContext(env, self)}
+	//val, err := object.Send(context, node.Value)
+	//if err != nil {
+	//	return nil, errors.Wrap(
+	//		object.NewUndefinedLocalVariableOrMethodNameError(self, node.Value),
+	//		"eval ident as method call",
+	//	)
+	//}
+	//fmt.Println("EvalIdentifer value:", val)
+	return nil, nil
 }
 
 func unwrapReturnValue(obj object.RubyObject) object.RubyObject {
@@ -879,7 +869,7 @@ func outputString(value string) object.RubyObject {
 
 func outputGetIdentifier(node ast.Node) {
 	//TODO: Don't disregard ok
-	src := "\t" + node.String() + ", _ := env.Get(\"" + node.String() + "\") \n"
+	src := "\t" + node.String() + ", ok := env.Get(\"" + node.String() + "\") \n"
 	//src = src + "\tfmt.Println(" + node.String() + ")"
 	appendToFile(src)
 }
@@ -964,10 +954,11 @@ func outputClassExpression(nodeVal ast.Node, env object.Environment) error {
 	src := `
 	superClassName := "Object"
 	`
+	appendToFile(src)
 	if node.SuperClass != nil {
 		src = src + `superClassName = ` + node.SuperClass.Value
 	}
-	src = src + `
+	src = `
 	superClass, ok := env.Get(superClassName)
 	class, ok := env.Get("` + node.Name.Value + `")
 	if !ok {
@@ -976,6 +967,7 @@ func outputClassExpression(nodeVal ast.Node, env object.Environment) error {
 	classEnv := class.(object.Environment)
 	classEnv.Set("self", &object.Self{RubyObject: class, Name: "` + node.Name.Value + `"})
 	`
+	appendToFile(src)
 	superClassName := "Object"
 	if node.SuperClass != nil {
 		superClassName = node.SuperClass.Value
@@ -998,7 +990,7 @@ func outputClassExpression(nodeVal ast.Node, env object.Environment) error {
 	if err != nil {
 		return errors.WithMessage(err, "eval class body")
 	}
-	src = src + `
+	src = `
 	selfObject, _ := classEnv.Get("self")
 	self := selfObject.(*object.Self)
 	env.Set("` + node.Name.Value + `", self.RubyObject)
@@ -1009,11 +1001,118 @@ func outputClassExpression(nodeVal ast.Node, env object.Environment) error {
 
 func outputContextCalls(node ast.Node) {
 	nodeVal := node.String()
-	fmt.Println(nodeVal)
+	fmt.Println("Output context call:", nodeVal, node.String())
 
 	if strings.Contains(nodeVal, "puts") {
 		appendToFile("fmt.Println(" + nodeVal + ")")
 	}
+}
+
+func outputFunction(nodeL ast.Node, env object.Environment) {
+	node := nodeL.(*ast.FunctionLiteral)
+	context, _ := env.Get("self")
+	_, inClassOrModule := context.(*object.Self).RubyObject.(object.Environment)
+	src := `
+	context, _ := env.Get("self")
+	_, inClassOrModule := context.(*object.Self).RubyObject.(object.Environment)
+	`
+	appendToFile(src)
+	//handle this
+	if node.Receiver != nil {
+		fmt.Println("FunctionLiteral Reciever is not empty: ", node.Receiver)
+		rec, err := Generate(node.Receiver, env)
+		if err != nil {
+			//return nil, errors.WithMessage(err, "eval function receiver")
+		}
+		context = rec
+		_, recIsEnv := context.(object.Environment)
+		if recIsEnv || inClassOrModule {
+			inClassOrModule = true
+			context = context.Class().(object.RubyClassObject)
+		}
+	}
+	//function parameters slice
+	params := make([]*object.FunctionParameter, len(node.Parameters))
+	src = `
+	params := make([]*object.FunctionParameter,` + strconv.FormatInt(int64(len(node.Parameters)), 10) + `)`
+	appendToFile(src)
+
+	for i, param := range node.Parameters {
+		fmt.Println("Looping params", param.String())
+		def, err := Generate(param.Default, env)
+		fmt.Println("Looping param def", def)
+		fmt.Println("After generating param", def, err)
+		if err != nil {
+			//return nil, errors.WithMessage(err, "eval function literal param")
+		}
+		params[i] = &object.FunctionParameter{Name: param.Name.Value, Default: def}
+
+		if def != nil {
+			src = `
+		params[` + strconv.FormatInt(int64(i), 10) + `] = &object.FunctionParameter{Name: "` + param.Name.Value + `", Default: ` + def.Inspect() + `}`
+		} else {
+			src = `
+		params[` + strconv.FormatInt(int64(i), 10) + `] = &object.FunctionParameter{Name: "` + param.Name.Value + `", Default: nil}`
+		}
+
+		appendToFile(src)
+		fmt.Println("function params: ", params[i])
+	}
+
+	body := node.Body
+	fmt.Println("Node body", node.Body, node.Body.Token.Type.String())
+	src = `
+	tokenType := token.Token{
+		Type:  ` + strconv.FormatInt(int64(body.Token.Type.Value()), 10) + `,
+	}
+	
+	tokenToWrite := token.Token{
+		Type:    tokenType.Type,
+		Pos:     ` + strconv.FormatInt(int64(body.Token.Pos), 10) + `,
+	}
+
+	endTokenToWrite := token.Token{
+		Type:    tokenType.Type,
+		Pos:     ` + strconv.FormatInt(int64(body.Token.Pos), 10) + `,
+	}
+
+	body := &ast.BlockStatement{
+		Token:    tokenToWrite,
+		EndToken: endTokenToWrite,
+	}
+	`
+	appendToFile(src)
+	function := &object.Function{
+		Parameters: params,
+		Env:        env,
+		Body:       body,
+	}
+	src = `
+	function := &object.Function{
+		Parameters: params,
+		Env:        env,
+		Body:       body,
+	}
+	`
+	appendToFile(src)
+	extended := object.AddMethod(context, node.Name.Value, function)
+	src = `
+	extended := object.AddMethod(context, "` + node.Name.Value + `", function)
+	`
+	appendToFile(src)
+	if node.Receiver != nil && !inClassOrModule {
+		fmt.Println("Inside reciever func")
+		envInfo, _ := object.EnvStat(env, context)
+		envInfo.Env().Set(node.Receiver.Value, extended)
+
+		src = `
+		envInfo, _ := object.EnvStat(env, context)
+		envInfo.Env().Set(` + node.Receiver.Value + `, extended)
+		`
+		appendToFile(src)
+	}
+	fmt.Println("Returning from function params")
+	//return &object.Symbol{Value: node.Name.Value}, nil
 }
 
 func getNewVariableName() string {
