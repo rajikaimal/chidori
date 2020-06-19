@@ -355,10 +355,11 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		outputClassExpression(node, env)
 		return nil, nil
 	case *ast.ContextCallExpression:
-		fmt.Println("ContextCallExpression:", node)
+		fmt.Println("ContextCallExpression:", node, node.Context)
 		//TODO: Support methods
 
-		outputContextCalls(node)
+		//outputContextCalls(node)
+
 		context, err := Generate(node.Context, env)
 		fmt.Println("Context: ", context, err)
 		if err != nil {
@@ -366,10 +367,17 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		}
 		if context == nil {
 			context, _ = env.Get("self")
+			src := `
+		context, _ := env.Get("self")
+			`
+			appendToFile(src)
 		}
 		args, err := evalExpressions(node.Arguments, env)
-		if err != nil {
-			return nil, errors.WithMessage(err, "eval method call arguments")
+		errGen := generateExpression(node.Arguments, env)
+
+		fmt.Println("args from eval for", node.Arguments, args)
+		if errGen != nil {
+			return nil, errors.WithMessage(errGen, "eval method call arguments")
 		}
 		if node.Block != nil {
 			fmt.Println("Block")
@@ -379,11 +387,22 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 			}
 			args = append(args, block)
 		}
-		callContext := &callContext{object.NewCallContext(env, context)}
+		//callContext := &callContext{object.NewCallContext(env, context)}
+		src := `
+		type callContext struct {
+			object.CallContext
+		}
+
+		callContextObj := &callContext{object.NewCallContext(env, context)} `
+
+		appendToFile(src)
 		fmt.Println("CallContext:", context)
-		a, b := object.Send(callContext, node.Function.Value, args...)
-		fmt.Println("After callcontext:", a, b)
-		return a, b
+		src = `
+		a, b := object.Send(callContextObj, "` + node.Function.Value + `", result...)
+		`
+		appendToFile(src)
+		callContext := &callContext{object.NewCallContext(env, context)}
+		return object.Send(callContext, node.Function.Value, args...)
 	case *ast.YieldExpression:
 		fmt.Println("YieldExpression:", node)
 		selfObject, _ := env.Get("self")
@@ -558,6 +577,32 @@ func evalExpressions(exps []ast.Expression, env object.Environment) ([]object.Ru
 	}
 	fmt.Println("eval result:", result)
 	return result, nil
+}
+
+func generateExpression(exps []ast.Expression, env object.Environment) error {
+	var result []object.RubyObject
+	src := `
+	var result []object.RubyObject
+	`
+
+	fmt.Println("EvalExpression: ", exps)
+	for _, e := range exps {
+		fmt.Println("Inside loop")
+		evaluated, err := Generate(e, env)
+		fmt.Println("Evaluated in eval exp:", e)
+		if err != nil {
+			return err
+		}
+		result = append(result, evaluated)
+		src = src + `
+		result = append(result, ` + evaluated.Inspect() + `)
+		`
+	}
+
+	fmt.Println("eval result:", result)
+	appendToFile(src)
+
+	return nil
 }
 
 func evalPrefixExpression(operator string, right object.RubyObject) (object.RubyObject, error) {
@@ -1012,12 +1057,6 @@ func outputFunction(nodeL ast.Node, env object.Environment) {
 	node := nodeL.(*ast.FunctionLiteral)
 	context, _ := env.Get("self")
 	_, inClassOrModule := context.(*object.Self).RubyObject.(object.Environment)
-	src := `
-	context, _ := env.Get("self")
-	_, inClassOrModule := context.(*object.Self).RubyObject.(object.Environment)
-	`
-	appendToFile(src)
-	//handle this
 	if node.Receiver != nil {
 		fmt.Println("FunctionLiteral Reciever is not empty: ", node.Receiver)
 		rec, err := Generate(node.Receiver, env)
@@ -1033,35 +1072,39 @@ func outputFunction(nodeL ast.Node, env object.Environment) {
 	}
 	//function parameters slice
 	params := make([]*object.FunctionParameter, len(node.Parameters))
-	src = `
+
+	if node.Receiver != nil && !inClassOrModule {
+		src := `
 	params := make([]*object.FunctionParameter,` + strconv.FormatInt(int64(len(node.Parameters)), 10) + `)`
-	appendToFile(src)
-
-	for i, param := range node.Parameters {
-		fmt.Println("Looping params", param.String())
-		def, err := Generate(param.Default, env)
-		fmt.Println("Looping param def", def)
-		fmt.Println("After generating param", def, err)
-		if err != nil {
-			//return nil, errors.WithMessage(err, "eval function literal param")
-		}
-		params[i] = &object.FunctionParameter{Name: param.Name.Value, Default: def}
-
-		if def != nil {
-			src = `
-		params[` + strconv.FormatInt(int64(i), 10) + `] = &object.FunctionParameter{Name: "` + param.Name.Value + `", Default: ` + def.Inspect() + `}`
-		} else {
-			src = `
-		params[` + strconv.FormatInt(int64(i), 10) + `] = &object.FunctionParameter{Name: "` + param.Name.Value + `", Default: nil}`
-		}
-
 		appendToFile(src)
-		fmt.Println("function params: ", params[i])
+
+		for i, param := range node.Parameters {
+			fmt.Println("Looping params", param.String())
+			def, err := Generate(param.Default, env)
+			fmt.Println("Looping param def", def)
+			fmt.Println("After generating param", def, err)
+			if err != nil {
+				//return nil, errors.WithMessage(err, "eval function literal param")
+			}
+			params[i] = &object.FunctionParameter{Name: param.Name.Value, Default: def}
+
+			if def != nil {
+				src = `
+		params[` + strconv.FormatInt(int64(i), 10) + `] = &object.FunctionParameter{Name: "` + param.Name.Value + `", Default: ` + def.Inspect() + `}`
+			} else {
+				src = `
+		params[` + strconv.FormatInt(int64(i), 10) + `] = &object.FunctionParameter{Name: "` + param.Name.Value + `", Default: nil}`
+			}
+
+			appendToFile(src)
+			fmt.Println("function params: ", params[i])
+		}
+
 	}
 
 	body := node.Body
 	fmt.Println("Node body", node.Body, node.Body.Token.Type.String())
-	src = `
+	src := `
 	tokenType := token.Token{
 		Type:  ` + strconv.FormatInt(int64(body.Token.Type.Value()), 10) + `,
 	}
@@ -1081,27 +1124,29 @@ func outputFunction(nodeL ast.Node, env object.Environment) {
 		EndToken: endTokenToWrite,
 	}
 	`
-	appendToFile(src)
 	function := &object.Function{
 		Parameters: params,
 		Env:        env,
 		Body:       body,
 	}
-	src = `
-	function := &object.Function{
-		Parameters: params,
-		Env:        env,
-		Body:       body,
-	}
-	`
-	appendToFile(src)
+
 	extended := object.AddMethod(context, node.Name.Value, function)
-	src = `
-	extended := object.AddMethod(context, "` + node.Name.Value + `", function)
-	`
-	appendToFile(src)
 	if node.Receiver != nil && !inClassOrModule {
 		fmt.Println("Inside reciever func")
+		appendToFile(src)
+		src = `
+	function := &object.Function{
+		Parameters: params,
+		Env:        env,
+		Body:       body,
+	}
+	`
+
+		src = src + `
+	extended := object.AddMethod(context, "` + node.Name.Value + `", function)
+	`
+		appendToFile(src)
+
 		envInfo, _ := object.EnvStat(env, context)
 		envInfo.Env().Set(node.Receiver.Value, extended)
 
