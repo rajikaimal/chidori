@@ -39,5 +39,5 @@ func (c *compiler) Compile(filename string, input interface{}) (object.RubyObjec
 	if err != nil {
 		return nil, object.NewSyntaxError(err)
 	}
-	return generator.Generate(node, c.environment)
+	return generator.Eval(node, c.environment)
 }

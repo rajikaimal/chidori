@@ -1,7 +1,9 @@
 package generator
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"reflect"
 	"sort"
@@ -17,8 +19,8 @@ type callContext struct {
 	object.CallContext
 }
 
-func (c *callContext) Generate(node ast.Node, env object.Environment) (object.RubyObject, error) {
-	return Generate(node, env)
+func (c *callContext) Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
+	return Eval(node, env)
 }
 
 type rubyObjects []object.RubyObject
@@ -48,7 +50,7 @@ var variableCount = 0
 var existingArrays = make(map[string]string)
 
 // Eval evaluates the given node and traverses recursive over its children
-func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) {
+func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 	switch node := node.(type) {
 	// Statements
 	case *ast.Program:
@@ -57,10 +59,10 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		return evalProgram(node.Statements, env)
 	case *ast.ExpressionStatement:
 		fmt.Println("Expression statement", node, node.Expression)
-		return Generate(node.Expression, env)
+		return Eval(node.Expression, env)
 	case *ast.ReturnStatement:
 		fmt.Println("Return statement", node)
-		val, err := Generate(node.ReturnValue, env)
+		val, err := Eval(node.ReturnValue, env)
 		if err != nil {
 			return nil, errors.WithMessage(err, "eval of return statement")
 		}
@@ -69,6 +71,7 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		fmt.Println("/////////// BlockStatment:", node.Statements, node, node.End(), node.Pos(), node.EndToken)
 		fmt.Println("BLOCK ENV", env)
 		return evalBlockStatement(node, env)
+		// Literals
 	case (*ast.IntegerLiteral):
 		// Literals
 		fmt.Println("----- IntegerLiteral:", node.Value)
@@ -86,6 +89,7 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		return self, nil
 	case (*ast.Keyword__FILE__):
 		return &object.String{Value: node.Filename}, nil
+
 	case (*ast.InstanceVariable):
 		fmt.Println("~~~~~~~~~~~~ InstanceVariable", node)
 		self, _ := env.Get("self")
@@ -127,7 +131,7 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 			return &object.Symbol{Value: value.Value}, nil
 		case *ast.StringLiteral:
 			fmt.Println("SymBolLiteralStringLiteral:", node)
-			str, err := Generate(value, env)
+			str, err := Eval(value, env)
 			if err != nil {
 				return nil, errors.WithMessage(err, "eval symbol literal string")
 			}
@@ -150,8 +154,8 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		_, inClassOrModule := context.(*object.Self).RubyObject.(object.Environment)
 		fmt.Println("Node reciever in function", node.Receiver)
 		if node.Receiver != nil {
-			fmt.Println("FunctionLiteral Reciever is not empty: ", node.Receiver)
-			rec, err := Generate(node.Receiver, env)
+			fmt.Println("~~~~ FunctionLiteral Reciever is not empty: ", node.Receiver)
+			rec, err := Eval(node.Receiver, env)
 			if err != nil {
 				return nil, errors.WithMessage(err, "eval function receiver")
 			}
@@ -165,8 +169,8 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		//function parameters slice
 		params := make([]*object.FunctionParameter, len(node.Parameters))
 		for i, param := range node.Parameters {
-			fmt.Println("Looping params", param.String())
-			def, err := Generate(param.Default, env)
+			fmt.Println("@@@ Looping params", param.String())
+			def, err := Eval(param.Default, env)
 			fmt.Println("After generating param", def, err)
 			if err != nil {
 				return nil, errors.WithMessage(err, "eval function literal param")
@@ -185,10 +189,10 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 			envInfo, _ := object.EnvStat(env, context)
 			envInfo.Env().Set(node.Receiver.Value, extended)
 		}
-		fmt.Println("Returning from function params")
-		return &object.Symbol{Value: node.Name.Value}, nil
+		fmt.Println("Returning from function params", node.Name.Value)
+		//return &object.Symbol{Value: node.Name.Value}, nil
+		return nil, nil
 	case *ast.BlockExpression:
-		fmt.Println("BlockExpression:", node)
 		params := node.Parameters
 		body := node.Body
 		block := &object.Proc{
@@ -209,11 +213,11 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		fmt.Println("HashLiteral:")
 		var hash object.Hash
 		for k, v := range node.Map {
-			key, err := Generate(k, env)
+			key, err := Eval(k, env)
 			if err != nil {
 				return nil, errors.WithMessage(err, "eval hash key")
 			}
-			value, err := Generate(v, env)
+			value, err := Eval(v, env)
 			if err != nil {
 				return nil, errors.WithMessage(err, "eval hash value")
 			}
@@ -224,7 +228,7 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		fmt.Println("ExpressionList:", node)
 		var objects []object.RubyObject
 		for _, e := range node {
-			obj, err := Generate(e, env)
+			obj, err := Eval(e, env)
 			if err != nil {
 				return nil, errors.WithMessage(err, "eval expression list")
 			}
@@ -235,7 +239,7 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 	// Expressions
 	case *ast.Assignment:
 		fmt.Println("Assignment here:", node)
-		right, err := Generate(node.Right, env)
+		right, err := Eval(node.Right, env)
 		fmt.Println("After generating assignment:", right)
 		if err != nil {
 			return nil, errors.WithMessage(err, "eval right hand Assignment side")
@@ -247,12 +251,12 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		switch left := node.Left.(type) {
 		case *ast.IndexExpression:
 			fmt.Println("IndexExpression:")
-			indexLeft, err := Generate(left.Left, env)
+			indexLeft, err := Eval(left.Left, env)
 			fmt.Println("IndexExpressionLeft:", indexLeft)
 			if err != nil {
 				return nil, errors.WithMessage(err, "eval left hand Assignment side: eval left side of IndexExpression")
 			}
-			index, err := Generate(left.Index, env)
+			index, err := Eval(left.Index, env)
 			if err != nil {
 				return nil, errors.WithMessage(err, "eval left hand Assignment side: eval right side of IndexExpression")
 			}
@@ -315,11 +319,11 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 					continue
 				}
 				if indexExp, ok := exp.(*ast.IndexExpression); ok {
-					indexLeft, err := Generate(indexExp.Left, env)
+					indexLeft, err := Eval(indexExp.Left, env)
 					if err != nil {
 						return nil, errors.WithMessage(err, "eval left hand Assignment side: eval left side of IndexExpression")
 					}
-					index, err := Generate(indexExp.Index, env)
+					index, err := Eval(indexExp.Index, env)
 					if err != nil {
 						return nil, errors.WithMessage(err, "eval left hand Assignment side: eval right side of IndexExpression")
 					}
@@ -342,7 +346,7 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		}
 		moduleEnv := module.(object.Environment)
 		moduleEnv.Set("self", &object.Self{RubyObject: module, Name: node.Name.Value})
-		bodyReturn, err := Generate(node.Body, moduleEnv)
+		bodyReturn, err := Eval(node.Body, moduleEnv)
 		if err != nil {
 			return nil, errors.WithMessage(err, "eval Module body")
 		}
@@ -360,7 +364,7 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 
 		//outputContextCalls(node)
 
-		context, err := Generate(node.Context, env)
+		context, err := Eval(node.Context, env)
 		fmt.Println("Context: ", context, err)
 		if err != nil {
 			return nil, errors.WithMessage(err, "eval method call receiver")
@@ -380,8 +384,8 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 			return nil, errors.WithMessage(errGen, "eval method call arguments")
 		}
 		if node.Block != nil {
-			fmt.Println("Block")
-			block, err := Generate(node.Block, env)
+			fmt.Println("~~~~ ** Block")
+			block, err := Eval(node.Block, env)
 			if err != nil {
 				return nil, errors.WithMessage(err, "eval method call block")
 			}
@@ -392,7 +396,6 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		type callContext struct {
 			object.CallContext
 		}
-
 		callContextObj := &callContext{object.NewCallContext(env, context)} `
 
 		appendToFile(src)
@@ -402,7 +405,9 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		`
 		appendToFile(src)
 		callContext := &callContext{object.NewCallContext(env, context)}
-		return object.Send(callContext, node.Function.Value, args...)
+		fmt.Println("This is callcontext:", callContext)
+		return nil, nil
+		//return object.Send(callContext, node.Function.Value, args...)
 	case *ast.YieldExpression:
 		fmt.Println("YieldExpression:", node)
 		selfObject, _ := env.Get("self")
@@ -418,19 +423,19 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		return self.Block.Call(callContext, args...)
 	case *ast.IndexExpression:
 		fmt.Println("IndexExpression:", node)
-		left, err := Generate(node.Left, env)
+		left, err := Eval(node.Left, env)
 		fmt.Println("IndexExpression:", left)
 		if err != nil {
 			return nil, errors.WithMessage(err, "eval IndexExpression left side")
 		}
-		index, err := Generate(node.Index, env)
+		index, err := Eval(node.Index, env)
 		if err != nil {
 			return nil, errors.WithMessage(err, "eval IndexExpression index")
 		}
 		return evalIndexExpression(left, index)
 	case *ast.PrefixExpression:
 		fmt.Println("PrefixExpression:", node)
-		right, err := Generate(node.Right, env)
+		right, err := Eval(node.Right, env)
 		fmt.Println("PrefixExpression right", right)
 		if err != nil {
 			return nil, errors.WithMessage(err, "eval prefix right side")
@@ -438,7 +443,7 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 		return evalPrefixExpression(node.Operator, right)
 	case *ast.InfixExpression:
 		fmt.Println(">>>>>>> InfixExpression:", node)
-		left, err := Generate(node.Left, env)
+		left, err := Eval(node.Left, env)
 		fmt.Println("InfixExpression generated:", left)
 		if err != nil {
 			return nil, errors.WithMessage(err, "eval operator left side")
@@ -450,7 +455,7 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 
 		fmt.Println("Generating right >>>>>", node.Operator)
 
-		right, err := Generate(node.Right, env)
+		right, err := Eval(node.Right, env)
 
 		fmt.Println("RIGHT INFIX", node.Right, node.Left)
 		if node.Operator == ">" || node.Operator == "<" {
@@ -500,14 +505,14 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 				"eval scope outer",
 			)
 		}
-		inner, err := Generate(node.Inner, outerEnv)
+		inner, err := Eval(node.Inner, outerEnv)
 		if err != nil {
 			return nil, errors.WithMessage(err, "eval scope inner")
 		}
 		return inner, nil
 	case *ast.ExceptionHandlingBlock:
 		fmt.Println("ExceptionHandlingBlock", node)
-		bodyReturn, err := Generate(node.TryBody, env)
+		bodyReturn, err := Eval(node.TryBody, env)
 		if err == nil {
 			return bodyReturn, nil
 		}
@@ -520,7 +525,7 @@ func Generate(node ast.Node, env object.Environment) (object.RubyObject, error) 
 	case *ast.LoopExpression:
 		fmt.Println("While loop", node.Condition, node.Block)
 		outputForLoop(node.Condition, env)
-		ret, err := Generate(node.Block, env)
+		ret, err := Eval(node.Block, env)
 		fmt.Println("__________________")
 		outputLoopEnd()
 		if err == nil {
@@ -544,7 +549,8 @@ func evalProgram(stmts []ast.Statement, env object.Environment) (object.RubyObje
 			continue
 		}
 
-		result, err = Generate(statement, env)
+		fmt.Println("@@@@@ statment", statement)
+		result, err = Eval(statement, env)
 
 		fmt.Println("Eval program errors:", err)
 		if err != nil {
@@ -568,7 +574,7 @@ func evalExpressions(exps []ast.Expression, env object.Environment) ([]object.Ru
 	fmt.Println("EvalExpression: ", exps)
 	for _, e := range exps {
 		fmt.Println("Inside loop")
-		evaluated, err := Generate(e, env)
+		evaluated, err := Eval(e, env)
 		fmt.Println("Evaluated in eval exp:", e)
 		if err != nil {
 			return nil, err
@@ -588,7 +594,7 @@ func generateExpression(exps []ast.Expression, env object.Environment) error {
 	fmt.Println("EvalExpression: ", exps)
 	for _, e := range exps {
 		fmt.Println("Inside loop")
-		evaluated, err := Generate(e, env)
+		evaluated, err := Eval(e, env)
 		fmt.Println("Evaluated in eval exp:", e)
 		if err != nil {
 			return err
@@ -640,7 +646,7 @@ func evalMinusPrefixOperatorExpression(right object.RubyObject) (object.RubyObje
 
 func evalConditionalExpression(ce *ast.ConditionalExpression, env object.Environment) (object.RubyObject, error) {
 	fmt.Println("Eval condition expr:", ce.Condition)
-	condition, err := Generate(ce.Condition, env)
+	condition, err := Eval(ce.Condition, env)
 	if err != nil {
 		return nil, err
 	}
@@ -649,9 +655,9 @@ func evalConditionalExpression(ce *ast.ConditionalExpression, env object.Environ
 		evaluateConsequence = !evaluateConsequence
 	}
 	if evaluateConsequence {
-		return Generate(ce.Consequence, env)
+		return Eval(ce.Consequence, env)
 	} else if ce.Alternative != nil {
-		return Generate(ce.Alternative, env)
+		return Eval(ce.Alternative, env)
 	} else {
 		return object.NIL, nil
 	}
@@ -732,7 +738,7 @@ func evalBlockStatement(block *ast.BlockStatement, env object.Environment) (obje
 	var err error
 	for _, statement := range block.Statements {
 		fmt.Println("Block statement:", statement.String())
-		result, err = Generate(statement, env)
+		result, err = Eval(statement, env)
 		fmt.Println("BlockSt ---- :", statement, statement.String())
 		if err != nil {
 			return nil, err
@@ -805,7 +811,7 @@ func handleException(err error, rescues []*ast.RescueBlock, env object.Environme
 		}
 		for _, cl := range r.ExceptionClasses {
 			if cl.Value == errClass {
-				rescueRet, err := Generate(r.Body, rescueEnv)
+				rescueRet, err := Eval(r.Body, rescueEnv)
 				return rescueRet, err
 			}
 		}
@@ -821,7 +827,7 @@ func handleException(err error, rescues []*ast.RescueBlock, env object.Environme
 		if catchAll.Exception != nil {
 			rescueEnv.Set(catchAll.Exception.Value, errorObject)
 		}
-		rescueRet, err := Generate(catchAll.Body, rescueEnv)
+		rescueRet, err := Eval(catchAll.Body, rescueEnv)
 		return rescueRet, err
 	}
 
@@ -877,7 +883,6 @@ func createMainFunc() {
 	src := `package main
  
 import "github.com/goruby/goruby/object"
-
 func main() { 
 	env := object.NewMainEnvironment()`
 	appendToFile(src)
@@ -926,7 +931,7 @@ func outputArray(exps []ast.Expression, env object.Environment, identifier strin
 	var result []object.RubyObject`)
 	}
 	for _, e := range exps {
-		evaluated, err := Generate(e, env)
+		evaluated, err := Eval(e, env)
 		//evalString := fmt.Sprintf("%v", e)
 		fmt.Println("Evaluated within write ---:", evaluated, reflect.TypeOf(evaluated), reflect.ValueOf(e))
 
@@ -948,7 +953,7 @@ func outputArray(exps []ast.Expression, env object.Environment, identifier strin
 }
 
 func outputForLoop(condition ast.Expression, env object.Environment) error {
-	generatedCondition, _ := Generate(condition, env)
+	generatedCondition, _ := Eval(condition, env)
 	src := `
 	for ` + generatedCondition.Inspect() + ` {
 	`
@@ -1030,7 +1035,7 @@ func outputClassExpression(nodeVal ast.Node, env object.Environment) error {
 	}
 	classEnv := class.(object.Environment)
 	classEnv.Set("self", &object.Self{RubyObject: class, Name: node.Name.Value})
-	_, err := Generate(node.Body, classEnv)
+	_, err := Eval(node.Body, classEnv)
 
 	if err != nil {
 		return errors.WithMessage(err, "eval class body")
@@ -1056,10 +1061,14 @@ func outputContextCalls(node ast.Node) {
 func outputFunction(nodeL ast.Node, env object.Environment) {
 	node := nodeL.(*ast.FunctionLiteral)
 	context, _ := env.Get("self")
+	src := `
+	context, _ := env.Get("self")
+	`
+	appendToFile(src)
 	_, inClassOrModule := context.(*object.Self).RubyObject.(object.Environment)
 	if node.Receiver != nil {
 		fmt.Println("FunctionLiteral Reciever is not empty: ", node.Receiver)
-		rec, err := Generate(node.Receiver, env)
+		rec, err := Eval(node.Receiver, env)
 		if err != nil {
 			//return nil, errors.WithMessage(err, "eval function receiver")
 		}
@@ -1072,39 +1081,39 @@ func outputFunction(nodeL ast.Node, env object.Environment) {
 	}
 	//function parameters slice
 	params := make([]*object.FunctionParameter, len(node.Parameters))
-
-	if node.Receiver != nil && !inClassOrModule {
-		src := `
+	src = `
 	params := make([]*object.FunctionParameter,` + strconv.FormatInt(int64(len(node.Parameters)), 10) + `)`
-		appendToFile(src)
+	appendToFile(src)
 
-		for i, param := range node.Parameters {
-			fmt.Println("Looping params", param.String())
-			def, err := Generate(param.Default, env)
-			fmt.Println("Looping param def", def)
-			fmt.Println("After generating param", def, err)
-			if err != nil {
-				//return nil, errors.WithMessage(err, "eval function literal param")
-			}
-			params[i] = &object.FunctionParameter{Name: param.Name.Value, Default: def}
+	for i, param := range node.Parameters {
+		fmt.Println("Looping params", param.String())
+		def, err := Eval(param.Default, env)
+		fmt.Println("Looping param def", def)
+		fmt.Println("After generating param", def, err)
+		if err != nil {
+			//return nil, errors.WithMessage(err, "eval function literal param")
+		}
+		params[i] = &object.FunctionParameter{Name: param.Name.Value, Default: def}
 
-			if def != nil {
-				src = `
+		if def != nil {
+			src = `
 		params[` + strconv.FormatInt(int64(i), 10) + `] = &object.FunctionParameter{Name: "` + param.Name.Value + `", Default: ` + def.Inspect() + `}`
-			} else {
-				src = `
+		} else {
+			src = `
 		params[` + strconv.FormatInt(int64(i), 10) + `] = &object.FunctionParameter{Name: "` + param.Name.Value + `", Default: nil}`
-			}
-
-			appendToFile(src)
-			fmt.Println("function params: ", params[i])
 		}
 
+		appendToFile(src)
+		fmt.Println("function params: ", params[i])
 	}
 
 	body := node.Body
-	fmt.Println("Node body", node.Body, node.Body.Token.Type.String())
-	src := `
+	fmt.Println("NODE BODY", body.End(), body.Pos(), body.String(), body.TokenLiteral(), body.EndToken, "Statements", body.Statements)
+
+	file, _ := json.MarshalIndent(body, "", "")
+	_ = ioutil.WriteFile("test.json", file, 0644)
+
+	src = `
 	tokenType := token.Token{
 		Type:  ` + strconv.FormatInt(int64(body.Token.Type.Value()), 10) + `,
 	}
@@ -1113,12 +1122,10 @@ func outputFunction(nodeL ast.Node, env object.Environment) {
 		Type:    tokenType.Type,
 		Pos:     ` + strconv.FormatInt(int64(body.Token.Pos), 10) + `,
 	}
-
 	endTokenToWrite := token.Token{
 		Type:    tokenType.Type,
 		Pos:     ` + strconv.FormatInt(int64(body.Token.Pos), 10) + `,
 	}
-
 	body := &ast.BlockStatement{
 		Token:    tokenToWrite,
 		EndToken: endTokenToWrite,
@@ -1131,10 +1138,9 @@ func outputFunction(nodeL ast.Node, env object.Environment) {
 	}
 
 	extended := object.AddMethod(context, node.Name.Value, function)
-	if node.Receiver != nil && !inClassOrModule {
-		fmt.Println("Inside reciever func")
-		appendToFile(src)
-		src = `
+	fmt.Println("Inside reciever func")
+	appendToFile(src)
+	src = `
 	function := &object.Function{
 		Parameters: params,
 		Env:        env,
@@ -1142,20 +1148,19 @@ func outputFunction(nodeL ast.Node, env object.Environment) {
 	}
 	`
 
-		src = src + `
+	src = src + `
 	extended := object.AddMethod(context, "` + node.Name.Value + `", function)
 	`
-		appendToFile(src)
-
+	appendToFile(src)
+	if node.Receiver != nil && !inClassOrModule {
 		envInfo, _ := object.EnvStat(env, context)
 		envInfo.Env().Set(node.Receiver.Value, extended)
-
 		src = `
 		envInfo, _ := object.EnvStat(env, context)
 		envInfo.Env().Set(` + node.Receiver.Value + `, extended)
 		`
-		appendToFile(src)
 	}
+
 	fmt.Println("Returning from function params")
 	//return &object.Symbol{Value: node.Name.Value}, nil
 }
