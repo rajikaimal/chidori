@@ -12,6 +12,7 @@ import (
 
 	"github.com/goruby/goruby/ast"
 	"github.com/goruby/goruby/object"
+	"github.com/goruby/goruby/persist"
 	"github.com/pkg/errors"
 )
 
@@ -47,6 +48,7 @@ func expandToArrayIfNeeded(obj object.RubyObject) object.RubyObject {
 
 var file, err = os.Create("compiled.go")
 var variableCount = 0
+var firstIter = true
 var existingArrays = make(map[string]string)
 
 // Eval evaluates the given node and traverses recursive over its children
@@ -91,7 +93,7 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 		return &object.String{Value: node.Filename}, nil
 
 	case (*ast.InstanceVariable):
-		fmt.Println("~~~~~~~~~~~~ InstanceVariable", node)
+		fmt.Println("~~~~~~~~~~~~ ######  InstanceVariable", node)
 		self, _ := env.Get("self")
 		selfObj := self.(*object.Self)
 		selfAsEnv, ok := selfObj.RubyObject.(object.Environment)
@@ -274,7 +276,7 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 			}
 
 			right = expandToArrayIfNeeded(right)
-			fmt.Println("InstanceVariable:", left, right)
+			fmt.Println("&&&&&&&&& InstanceVariable Assignment:", left, right)
 			selfAsEnv.Set(left.String(), right)
 			return right, nil
 		case *ast.Identifier:
@@ -356,8 +358,32 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 		return bodyReturn, nil
 	case *ast.ClassExpression:
 		fmt.Println("ClassExpression:", node.Name.Value)
+		superClassName := "Object"
+		if node.SuperClass != nil {
+			superClassName = node.SuperClass.Value
+		}
+		superClass, ok := env.Get(superClassName)
+		if !ok {
+			return nil, errors.Wrap(
+				object.NewUninitializedConstantNameError(superClassName),
+				"eval class superclass",
+			)
+		}
+		class, ok := env.Get(node.Name.Value)
+		if !ok {
+			class = object.NewClass(node.Name.Value, superClass.(object.RubyClassObject), env)
+		}
+		classEnv := class.(object.Environment)
+		classEnv.Set("self", &object.Self{RubyObject: class, Name: node.Name.Value})
+		bodyReturn, err := Eval(node.Body, classEnv)
+		if err != nil {
+			return nil, errors.WithMessage(err, "eval class body")
+		}
+		selfObject, _ := classEnv.Get("self")
+		self := selfObject.(*object.Self)
+		env.Set(node.Name.Value, self.RubyObject)
 		outputClassExpression(node, env)
-		return nil, nil
+		return bodyReturn, nil
 	case *ast.ContextCallExpression:
 		fmt.Println("ContextCallExpression:", node, node.Context)
 		//TODO: Support methods
@@ -391,23 +417,31 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 			}
 			args = append(args, block)
 		}
-		//callContext := &callContext{object.NewCallContext(env, context)}
-		src := `
+		callContext := &callContext{object.NewCallContext(env, context)}
+		newVar := getNewVariableName()
+		if firstIter {
+			firstIter = false
+			src := `
 		type callContext struct {
 			object.CallContext
+		}`
+			appendToFile(src)
 		}
-		callContextObj := &callContext{object.NewCallContext(env, context)} `
 
+		src := `
+callContextObj` + newVar + ` := &callContext{object.NewCallContext(env, ` + context.Inspect() + getCurrentVariableForClass() + `)} 
+		`
 		appendToFile(src)
 		fmt.Println("CallContext:", context)
 		src = `
-		a, b := object.Send(callContextObj, "` + node.Function.Value + `", result...)
+		_, _= object.Send(callContextObj` + newVar + `, "` + node.Function.Value + `", result...)
 		`
 		appendToFile(src)
-		callContext := &callContext{object.NewCallContext(env, context)}
+		//callContext := &callContext{object.NewCallContext(env, context)}
 		fmt.Println("This is callcontext:", callContext)
-		return nil, nil
-		//return object.Send(callContext, node.Function.Value, args...)
+		res, err := object.Send(callContext, node.Function.Value, args...)
+		fmt.Println("********* ", res, err)
+		return res, nil
 	case *ast.YieldExpression:
 		fmt.Println("YieldExpression:", node)
 		selfObject, _ := env.Get("self")
@@ -587,10 +621,14 @@ func evalExpressions(exps []ast.Expression, env object.Environment) ([]object.Ru
 
 func generateExpression(exps []ast.Expression, env object.Environment) error {
 	var result []object.RubyObject
-	src := `
+	if firstIter {
+		src := `
 	var result []object.RubyObject
 	`
+		appendToFile(src)
+	}
 
+	src := ""
 	fmt.Println("EvalExpression: ", exps)
 	for _, e := range exps {
 		fmt.Println("Inside loop")
@@ -758,31 +796,30 @@ func evalBlockStatement(block *ast.BlockStatement, env object.Environment) (obje
 }
 
 func evalIdentifier(node *ast.Identifier, env object.Environment) (object.RubyObject, error) {
-	fmt.Println("ValueEvalIdentifer:", node)
-	//val, ok := env.Get(node.Value)
-	outputGetIdentifier(node)
-	fmt.Println("EvalIdentifer val:")
+	val, ok := env.Get(node.Value)
+	_ = outputGetIdentifier(node)
+	fmt.Println("Identifer ok", node.Value, ok, val)
+	if ok {
+		return val, nil
+	}
 
-	//TODO
-	//if node.IsConstant() {
-	//	fmt.Println("EvalIdentifer node is constant")
-	//	return nil, errors.Wrap(
-	//		object.NewUninitializedConstantNameError(node.Value),
-	//		"eval identifier",
-	//	)
-	//}
+	if node.IsConstant() {
+		return nil, errors.Wrap(
+			object.NewUninitializedConstantNameError(node.Value),
+			"eval identifier",
+		)
+	}
 
-	//self, _ := env.Get("self")
-	//context := &callContext{object.NewCallContext(env, self)}
-	//val, err := object.Send(context, node.Value)
-	//if err != nil {
-	//	return nil, errors.Wrap(
-	//		object.NewUndefinedLocalVariableOrMethodNameError(self, node.Value),
-	//		"eval ident as method call",
-	//	)
-	//}
-	//fmt.Println("EvalIdentifer value:", val)
-	return nil, nil
+	self, _ := env.Get("self")
+	context := &callContext{object.NewCallContext(env, self)}
+	val, err := object.Send(context, node.Value)
+	if err != nil {
+		return nil, errors.Wrap(
+			object.NewUndefinedLocalVariableOrMethodNameError(self, node.Value),
+			"eval ident as method call",
+		)
+	}
+	return val, nil
 }
 
 func unwrapReturnValue(obj object.RubyObject) object.RubyObject {
@@ -917,11 +954,14 @@ func outputString(value string) object.RubyObject {
 	return stringObj
 }
 
-func outputGetIdentifier(node ast.Node) {
+func outputGetIdentifier(node ast.Node) string {
 	//TODO: Don't disregard ok
-	src := "\t" + node.String() + ", ok := env.Get(\"" + node.String() + "\") \n"
+	newVar := getNewVariableName()
+	src := "\t" + node.String() + newVar + ", ok := env.Get(\"" + node.String() + "\") \n"
 	//src = src + "\tfmt.Println(" + node.String() + ")"
 	appendToFile(src)
+
+	return node.String() + newVar
 }
 
 func outputArray(exps []ast.Expression, env object.Environment, identifier string) (string, error) {
@@ -1085,6 +1125,10 @@ func outputFunction(nodeL ast.Node, env object.Environment) {
 	params := make([]*object.FunctionParameter,` + strconv.FormatInt(int64(len(node.Parameters)), 10) + `)`
 	appendToFile(src)
 
+	if err := persist.Save("./file.tmp", node.Body); err != nil {
+		fmt.Println(err)
+	}
+
 	for i, param := range node.Parameters {
 		fmt.Println("Looping params", param.String())
 		def, err := Eval(param.Default, env)
@@ -1108,10 +1152,18 @@ func outputFunction(nodeL ast.Node, env object.Environment) {
 	}
 
 	body := node.Body
+	fmt.Println("#### node body", node.Body, "Token:", node.Body.Token, "Statements:", node.Body.Statements, "Literal:", node.Body.Token.Literal)
 	fmt.Println("NODE BODY", body.End(), body.Pos(), body.String(), body.TokenLiteral(), body.EndToken, "Statements", body.Statements)
+	fmt.Println("Token literal:", node.Body.TokenLiteral())
+	fmt.Println("POS:::", body.Token.Pos)
 
 	file, _ := json.MarshalIndent(body, "", "")
 	_ = ioutil.WriteFile("test.json", file, 0644)
+
+	//FUNCBODY EVAL
+	//save instance variable in body eval to slice (unoptimized)
+	//bodyEval, errBody := Eval(node.Body, env)
+	//fmt.Println("@@@ Func Body Eval", bodyEval, errBody)
 
 	src = `
 	tokenType := token.Token{
@@ -1129,6 +1181,7 @@ func outputFunction(nodeL ast.Node, env object.Environment) {
 	body := &ast.BlockStatement{
 		Token:    tokenToWrite,
 		EndToken: endTokenToWrite,
+		Statements: stToWrite,
 	}
 	`
 	function := &object.Function{
@@ -1169,6 +1222,10 @@ func getNewVariableName() string {
 	variableCount = variableCount + 1
 
 	return "v" + strconv.Itoa(variableCount)
+}
+
+func getCurrentVariableForClass() string {
+	return "v" + strconv.Itoa(variableCount-1)
 }
 
 func appendToFile(content string) {

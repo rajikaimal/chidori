@@ -13,6 +13,7 @@ func Send(context CallContext, method string, args ...RubyObject) (RubyObject, e
 	fmt.Println("METHOD", method, class.Name())
 	// search for the method in the ancestry tree
 	for class != nil {
+		fmt.Println("~~~~~~~~~~~~~~~")
 		fmt.Println(class.Methods().Get(method))
 		fn, ok := class.Methods().Get(method)
 		if !ok {

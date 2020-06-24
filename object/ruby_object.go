@@ -178,7 +178,7 @@ func (f *Function) String() string {
 
 // Call implements the RubyMethod interface. It evaluates f.Body and returns its result
 func (f *Function) Call(context CallContext, args ...RubyObject) (RubyObject, error) {
-	fmt.Println("Inside method func call")
+	fmt.Println("Inside method func call", args)
 	block, arguments, _ := extractBlockFromArgs(args)
 	defaultParams := functionParameters(f.Parameters).defaultParamCount()
 	if len(arguments) < len(f.Parameters)-defaultParams || len(arguments) > len(f.Parameters) {
