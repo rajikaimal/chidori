@@ -2,10 +2,6 @@ package chidorilib
 
 import "fmt"
 
-type ProgramValues struct {
-	Classes map[string]Class
-}
-
 type Value struct {
 	Class  map[string]Class
 	Object map[string]Object
