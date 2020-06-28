@@ -43,18 +43,21 @@ func (c *Class) GetClassVariables() map[string]string {
 	return c.ClassVariables
 }
 
-func (c *Class) Call() Object {
+func (c *Class) Call(objectName string) Object {
 	obj := Object{
 		Class: Class{
 			ClassName:      c.ClassName,
 			ClassVariables: c.ClassVariables,
 			Methods:        c.Methods,
 		},
+		ObjectName:        objectName,
 		InstanceVariables: make(map[string]string),
 	}
 
 	init := obj.Methods["initialize"]
-	init.Body(obj)
+	if init.Name != "" {
+		init.Body(obj)
+	}
 
 	return obj
 }
@@ -67,6 +70,7 @@ type Obj interface {
 type Object struct {
 	Class
 	ClassName         string
+	ObjectName        string
 	ClassVariables    map[string]string
 	InstanceVariables map[string]string
 }

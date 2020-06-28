@@ -1,5 +1,7 @@
 package object
 
+import "fmt"
+
 type visibility int
 
 // MethodVisibility represents the visibility of a method
@@ -92,10 +94,12 @@ func (m *methodSet) GetAll() map[string]RubyMethod {
 }
 
 func (m *methodSet) Get(name string) (RubyMethod, bool) {
+	fmt.Println("GET METHHOD", name)
 	method, ok := m.methods[name]
 	return method, ok
 }
 
 func (m *methodSet) Set(name string, method RubyMethod) {
+	fmt.Println("SET METHHOD", name)
 	m.methods[name] = method
 }

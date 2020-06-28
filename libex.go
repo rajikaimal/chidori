@@ -6,7 +6,6 @@ import "fmt"
 func main() {
 	programValuesList := chidorilib.Value{}
 
-	methodHashMap := make(map[string]chidorilib.Method)
 	v0 := chidorilib.Method{
 		"initialize",
 		"Object",
@@ -21,6 +20,7 @@ func main() {
 		fmt.Println("End init")
 	}
 
+	methodHashMap := make(map[string]chidorilib.Method)
 	methodHashMap["initialize"] = v0
 
 	v1 := chidorilib.Method{
@@ -52,13 +52,14 @@ func main() {
 
 	//fmt.Println(exampleClass.GetClassVariables())
 
-	v6 := v5.Call()
+	v6 := v5.Call("cust")
 
-	fmt.Println(v5.GetClassVariables())
+	fmt.Println("CLASS VAR", v5.GetClassVariables())
 	v6.SetInstanceVariables("name", "RAJIKA")
-	fmt.Println(v6.GetInstanceVariables())
+	fmt.Println("INST VAR", v6.GetInstanceVariables())
 
 	io := chidorilib.IO{Puts: "HELLO"}
+
 	fmt.Println("HERE")
 	io.Out()
 	//v7 := v6.Class.Methods["foo"]
