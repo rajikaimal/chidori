@@ -10,12 +10,14 @@ type Value struct {
 
 type Cls interface {
 	GetClassVariables() map[string]string
+	SetInstanceVariable(varName string)
 	Call() Object
 }
 
 type Class struct {
 	ClassName      string
 	ClassVariables map[string]string
+	InstanceVar    map[string]string
 	Methods        map[string]Method
 }
 
@@ -43,11 +45,21 @@ func (c *Class) GetClassVariables() map[string]string {
 	return c.ClassVariables
 }
 
+func (c *Class) SetInstanceVariable(variableName string) {
+	instanceHashMap := c.InstanceVar
+	if instanceHashMap == nil {
+		c.InstanceVar = make(map[string]string)
+	}
+
+	c.InstanceVar[variableName] = ""
+}
+
 func (c *Class) Call(objectName string) Object {
 	obj := Object{
 		Class: Class{
 			ClassName:      c.ClassName,
 			ClassVariables: c.ClassVariables,
+			InstanceVar:    c.InstanceVar,
 			Methods:        c.Methods,
 		},
 		ObjectName:        objectName,
@@ -59,12 +71,18 @@ func (c *Class) Call(objectName string) Object {
 		init.Body(obj)
 	}
 
+	if obj.InstanceVariables == nil {
+		obj.InstanceVariables = make(map[string]string)
+	}
+
 	return obj
 }
 
 type Obj interface {
 	GetInstanceVariables() map[string]string
 	SetInstanceVariables(name string, value string)
+	SetInstanceVariableDy(name string, value string)
+	Invoke()
 }
 
 type Object struct {
@@ -81,6 +99,25 @@ func (o *Object) GetInstanceVariables() map[string]string {
 
 func (o *Object) SetInstanceVariables(name string, value string) {
 	o.InstanceVariables[name] = value
+}
+
+func (o *Object) SetInstanceVariableDy(class Class, name string, value string) {
+	instanceAttr := class.InstanceVar[name]
+
+	fmt.Println("HERER", o)
+	if instanceAttr == "" {
+		return
+	}
+
+	o.InstanceVariables[name] = value
+}
+
+func (o *Object) Invoke(methodName string) {
+	method := o.Methods[methodName]
+	if method.Name != "" {
+		method.Body(*o)
+	}
+
 }
 
 type Method struct {

@@ -48,6 +48,8 @@ var file, err = os.Create("compiled.go")
 var variableCount = 0
 var firstIter = true
 var existingArrays = make(map[string]string)
+var classes = make(map[string]bool)
+var currentClass = ""
 
 // Eval evaluates the given node and traverses recursive over its children
 func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
@@ -255,6 +257,14 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 		fmt.Println("Assignment Left:", node.Left)
 
 		switch left := node.Left.(type) {
+		case *ast.ContextCallExpression:
+			exp := strings.TrimSuffix(node.Left.String(), "()")
+			ids := strings.Split(string(exp), ".")
+
+			if len(ids) == 2 {
+				outputDynamicVarAssignment(ids[0], "@"+ids[1], node.Right.String())
+			}
+			return nil, nil
 		case *ast.IndexExpression:
 			fmt.Println("IndexExpression:")
 			indexLeft, err := Eval(left.Left, env)
@@ -381,10 +391,11 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 		}
 		classEnv := class.(object.Environment)
 		classEnv.Set("self", &object.Self{RubyObject: class, Name: node.Name.Value})
-		outputFunctionMap()
+		className := node.Name.Value
+		outputFunctionMap(className)
 		bodyReturn, err := Eval(node.Body, classEnv)
 
-		outputClass(node.Name.Value)
+		outputClass(className)
 		if err != nil {
 			return nil, errors.WithMessage(err, "eval class body")
 		}
@@ -396,15 +407,30 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 	case *ast.ContextCallExpression:
 		fmt.Println("ContextCallExpression:", node.String())
 		//TODO: Support methods
+		env.Set("isClassInstantiate", &object.Boolean{Value: false})
 		isNewClass := strings.Contains(node.String(), "new()")
 		if isNewClass {
 			env.Set("isClassInstantiate", &object.Boolean{Value: true})
+		} else {
+			fmt.Println("SPLIT IS DONE FOR", node.String())
+			mthds := strings.TrimSuffix(node.String(), "()")
+			ids := strings.Split(string(mthds), ".")
+
+			if len(ids) == 2 {
+				outputFunctionInvoke(ids[0], ids[1])
+			}
+			//methodName := strings.Split(mthds[1], "(")[0]
 		}
 
 		//outputContextCalls(node)
 
 		context, err := Eval(node.Context, env)
-		fmt.Println("Context: ", context, err)
+		fmt.Println("Context: ", context, node.Arguments, node.Token, node.Function, node.Context, node.String(), node)
+		varNames := node.Arguments
+		if len(varNames) > 0 {
+			outputDynamicVarAdd(node.Arguments[0].String())
+		}
+		fmt.Println("^^^^^^^&&&&&&&&")
 		if err != nil {
 			return nil, errors.WithMessage(err, "eval method call receiver")
 		}
@@ -593,7 +619,7 @@ func evalProgram(stmts []ast.Statement, env object.Environment) (object.RubyObje
 func evalExpressions(exps []ast.Expression, env object.Environment) ([]object.RubyObject, error) {
 	var result []object.RubyObject
 
-	fmt.Println("EvalExpression: ", exps)
+	fmt.Println("EvalExpression: ...", exps)
 	for _, e := range exps {
 		fmt.Println("Inside loop")
 		evaluated, err := Eval(e, env)
@@ -786,6 +812,7 @@ func evalBlockStatement(block *ast.BlockStatement, env object.Environment) (obje
 func evalIdentifier(node *ast.Identifier, env object.Environment) (object.RubyObject, error) {
 	val, ok := env.Get(node.Value)
 	isClassInstantiate, _ := env.Get("isClassInstantiate")
+
 	fmt.Println("HERE ........", isClassInstantiate, node.String())
 	if isClassInstantiate != nil {
 		isNewClass := isClassInstantiate.(*object.Boolean)
@@ -941,8 +968,8 @@ func outputValue(value string, right object.RubyObject, env object.Environment) 
 			currentVar := getCurrentVariable()
 			src := `
 			` + getNewVariableName() + ` := ` + currentVar + `.Call("` + value + `")
-	`
-
+			programValuesList.Object["` + value + `"] = ` + getCurrentVariable() + `
+			`
 			appendToFile(src)
 		}
 
@@ -1067,70 +1094,32 @@ func outputInfixString(left object.RubyObject, nLeft ast.Expression, right objec
 	}
 }
 
-func outputClassExpression(nodeVal ast.Node, env object.Environment) error {
-	node := nodeVal.(*ast.ClassExpression)
-	fmt.Println("ClassExpressionFunc:", node.Name.Value)
+func outputDynamicVarAdd(varName string) {
+	variable := varName[1:]
+	variable = "@" + variable
 	src := `
-	superClassName := "Object"
+	` + getNewVariableName() + ` := programValuesList.Class["` + currentClass + `"]
+	` + getCurrentVariable() + `.SetInstanceVariable("` + variable + `")
 	`
+	fmt.Println(">>>>>>>>>", src)
 	appendToFile(src)
-	if node.SuperClass != nil {
-		src = src + `superClassName = ` + node.SuperClass.Value
-	}
-	src = `
-	superClass, ok := env.Get(superClassName)
-	class, ok := env.Get("` + node.Name.Value + `")
-	if !ok {
-		class = object.NewClass("` + node.Name.Value + `", superClass.(object.RubyClassObject), env)
-	}
-	classEnv := class.(object.Environment)
-	classEnv.Set("self", &object.Self{RubyObject: class, Name: "` + node.Name.Value + `"})
-	`
-	appendToFile(src)
-	superClassName := "Object"
-	if node.SuperClass != nil {
-		superClassName = node.SuperClass.Value
-	}
-	superClass, ok := env.Get(superClassName)
-	if !ok {
-		return errors.Wrap(
-			object.NewUninitializedConstantNameError(superClassName),
-			"eval class superclass",
-		)
-	}
-	class, ok := env.Get(node.Name.Value)
-	if !ok {
-		class = object.NewClass(node.Name.Value, superClass.(object.RubyClassObject), env)
-	}
-	classEnv := class.(object.Environment)
-	classEnv.Set("self", &object.Self{RubyObject: class, Name: node.Name.Value})
-	_, err := Eval(node.Body, classEnv)
-
-	if err != nil {
-		return errors.WithMessage(err, "eval class body")
-	}
-	src = `
-	selfObject, _ := classEnv.Get("self")
-	self := selfObject.(*object.Self)
-	env.Set("` + node.Name.Value + `", self.RubyObject)
-	`
-	appendToFile(src)
-	return nil
 }
 
-func outputContextCalls(node ast.Node) {
-	nodeVal := node.String()
-	fmt.Println("Output context call:", nodeVal, node.String())
-
-	if strings.Contains(nodeVal, "puts") {
-		appendToFile("fmt.Println(" + nodeVal + ")")
-	}
+func outputDynamicVarAssignment(objectName string, varName, varValue string) {
+	src := `
+	` + getNewVariableName() + ` := programValuesList.Object["` + objectName + `"]
+	` + getCurrentVariable() + `.SetInstanceVariableDy("` + varName + `", "` + varValue + `")`
+	appendToFile(src)
 }
 
 func outputClass(className string) {
-	classVariablesVar := getNewVariableName()
-	classVar := getNewVariableName()
-	src := `
+	classExists := classes[className]
+	currentClass = className
+
+	if !classExists {
+		classVariablesVar := getNewVariableName()
+		classVar := getNewVariableName()
+		src := `
 	programValuesList := chidorilib.Value{}
 
 	` + classVariablesVar + ` := make(map[string]string)
@@ -1141,13 +1130,29 @@ func outputClass(className string) {
 	}
 
 	programValuesList.Class = make(map[string]chidorilib.Class)
+	programValuesList.Object = make(map[string]chidorilib.Object)
 	programValuesList.Class["` + className + `"] = ` + classVar + ``
-	appendToFile(src)
+		appendToFile(src)
+
+	}
+	classes[className] = true
 }
 
-func outputFunctionMap() {
-	src := `
+func outputFunctionMap(className string) {
+	classExists := classes[className]
+	if !classExists {
+		src := `
 	methodHashMap := make(map[string]chidorilib.Method)
+	`
+		appendToFile(src)
+
+	}
+}
+
+func outputFunctionInvoke(objectName string, methodName string) {
+	src := `
+	` + getNewVariableName() + ` := programValuesList.Object["` + objectName + `"]
+	` + getCurrentVariable() + `.Invoke("` + methodName + `")
 	`
 	appendToFile(src)
 }

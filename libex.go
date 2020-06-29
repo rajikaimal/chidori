@@ -32,6 +32,7 @@ func main() {
 	v1.Body = func(o chidorilib.Object) {
 		fmt.Println(o.GetClassVariables())
 		fmt.Println("ENd")
+		fmt.Println("OHOOOO FOTT")
 	}
 
 	methodHashMap["foo"] = v1
@@ -46,21 +47,26 @@ func main() {
 	}
 
 	programValuesList.Class = make(map[string]chidorilib.Class)
+	programValuesList.Object = make(map[string]chidorilib.Object)
 	programValuesList.Class["Example"] = v4
 
 	v5 := programValuesList.Class["Example"]
+	v5.SetInstanceVariable("cc")
 
 	//fmt.Println(exampleClass.GetClassVariables())
 
 	v6 := v5.Call("cust")
 
+	programValuesList.Object["cust"] = v6
 	fmt.Println("CLASS VAR", v5.GetClassVariables())
 	v6.SetInstanceVariables("name", "RAJIKA")
 	fmt.Println("INST VAR", v6.GetInstanceVariables())
 
+	cust := programValuesList.Object["cust"]
+	cust.Invoke("foo")
+	cust.SetInstanceVariablesDy("cc", "ASDsd")
 	io := chidorilib.IO{Puts: "HELLO"}
 
-	fmt.Println("HERE")
 	io.Out()
 	//v7 := v6.Class.Methods["foo"]
 	//v7.Body(v6)

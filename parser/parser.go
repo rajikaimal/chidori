@@ -253,6 +253,9 @@ func (p *parser) registerPrefix(tokenType token.Type, fn prefixParseFn) {
 }
 
 func (p *parser) registerInfix(tokenType token.Type, fn infixParseFn) {
+	if tokenType.String() == token.DOT.String() {
+		fmt.Println("DOT ah", tokenType.String(), token.DOT.String())
+	}
 	p.infixParseFns[tokenType] = fn
 }
 
@@ -587,6 +590,7 @@ func (p *parser) parseAssignment(left ast.Expression) ast.Expression {
 	case *ast.Global:
 	case *ast.IndexExpression:
 	case *ast.InstanceVariable:
+	case *ast.ContextCallExpression:
 	case ast.ExpressionList:
 	case *ast.Keyword__FILE__:
 		epos := p.file.Position(p.pos)
@@ -1243,6 +1247,7 @@ func (p *parser) parseMethodCall(context ast.Expression) ast.Expression {
 	}
 
 	function := &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+
 	contextCallExpression.Function = function
 
 	if p.peekTokenOneOf(token.SEMICOLON, token.NEWLINE, token.EOF, token.DOT, token.SCOPE) {
