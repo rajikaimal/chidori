@@ -83,6 +83,7 @@ type Obj interface {
 	SetInstanceVariables(name string, value string)
 	SetInstanceVariableDy(name string, value string)
 	Invoke()
+	AddMethod(m Method) bool
 }
 
 type Object struct {
@@ -91,6 +92,7 @@ type Object struct {
 	ObjectName        string
 	ClassVariables    map[string]string
 	InstanceVariables map[string]string
+	DynamicMethods    map[string]Method
 }
 
 func (o *Object) GetInstanceVariables() map[string]string {
@@ -104,12 +106,11 @@ func (o *Object) SetInstanceVariables(name string, value string) {
 func (o *Object) SetInstanceVariableDy(class Class, name string, value string) {
 	instanceAttr := class.InstanceVar[name]
 
-	fmt.Println("HERER", o)
 	if instanceAttr == "" {
+		o.InstanceVariables[name] = value
 		return
 	}
 
-	o.InstanceVariables[name] = value
 }
 
 func (o *Object) Invoke(methodName string) {
@@ -118,6 +119,26 @@ func (o *Object) Invoke(methodName string) {
 		method.Body(*o)
 	}
 
+}
+
+func (o *Object) AddMethod(m Method) bool {
+	if o != nil {
+		methodExists := false
+		for k, _ := range o.Methods {
+			if k == m.Name {
+				methodExists = true
+			}
+		}
+
+		if !methodExists {
+			o.DynamicMethods[m.Name] = m
+			return true
+		} else {
+			return false
+		}
+	} else {
+		return false
+	}
 }
 
 type Method struct {

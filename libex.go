@@ -64,10 +64,26 @@ func main() {
 
 	cust := programValuesList.Object["cust"]
 	cust.Invoke("foo")
-	cust.SetInstanceVariablesDy("cc", "ASDsd")
 	io := chidorilib.IO{Puts: "HELLO"}
 
+	v10 := chidorilib.Method{
+		"dynamicmethod",
+		"Object",
+		nil,
+	}
+
+	v10.Body = func(o chidorilib.Object) {
+		fmt.Println(o.GetClassVariables())
+		fmt.Println("OHOOOO DYNAMIC METHOD")
+	}
+
+	methodHashMap["dynamicmethod"] = v10
+
+	v11 := programValuesList.Object["cust"]
+	v11.AddMethod(v10)
+
 	io.Out()
+	v11.Invoke("dynamicmethod")
 	//v7 := v6.Class.Methods["foo"]
 	//v7.Body(v6)
 }

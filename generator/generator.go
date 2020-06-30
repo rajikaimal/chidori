@@ -161,19 +161,19 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 		fmt.Println("------------- function context", context.Inspect(), res, err)
 		_, inClassOrModule := context.(*object.Self).RubyObject.(object.Environment)
 		fmt.Println("Node reciever in function", node.Receiver)
-		if node.Receiver != nil {
-			fmt.Println("~~~~ FunctionLiteral Reciever is not empty: ", node.Receiver)
-			rec, err := Eval(node.Receiver, env)
-			if err != nil {
-				return nil, errors.WithMessage(err, "eval function receiver")
-			}
-			context = rec
-			_, recIsEnv := context.(object.Environment)
-			if recIsEnv || inClassOrModule {
-				inClassOrModule = true
-				context = context.Class().(object.RubyClassObject)
-			}
-		}
+		//if node.Receiver != nil {
+		//	fmt.Println("~~~~ FunctionLiteral Reciever is not empty: ", node.Receiver)
+		//	rec, err := Eval(node.Receiver, env)
+		//	if err != nil {
+		//		return nil, errors.WithMessage(err, "eval function receiver")
+		//	}
+		//	context = rec
+		//	_, recIsEnv := context.(object.Environment)
+		//	if recIsEnv || inClassOrModule {
+		//		inClassOrModule = true
+		//		context = context.Class().(object.RubyClassObject)
+		//	}
+		//}
 		//function parameters slice
 		params := make([]*object.FunctionParameter, len(node.Parameters))
 		for i, param := range node.Parameters {
@@ -453,9 +453,9 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 		callContext := &callContext{object.NewCallContext(env, context)}
 		//callContext := &callContext{object.NewCallContext(env, context)}
 		fmt.Println("This is callcontext:", callContext)
-		res, err := object.Send(callContext, node.Function.Value, args...)
-		fmt.Println("********* ", res, err)
-		return res, nil
+		//res, err := object.Send(callContext, node.Function.Value, args...)
+		//fmt.Println("********* ", res, err)
+		return nil, nil
 	case *ast.YieldExpression:
 		fmt.Println("YieldExpression:", node)
 		selfObject, _ := env.Get("self")
@@ -1108,7 +1108,7 @@ func outputDynamicVarAdd(varName string) {
 func outputDynamicVarAssignment(objectName string, varName, varValue string) {
 	src := `
 	` + getNewVariableName() + ` := programValuesList.Object["` + objectName + `"]
-	` + getCurrentVariable() + `.SetInstanceVariableDy("` + varName + `", "` + varValue + `")`
+	` + getCurrentVariable() + `.SetInstanceVariableDy(` + getCurrentVariable() + `.Class, "` + varName + `", "` + varValue + `")`
 	appendToFile(src)
 }
 
