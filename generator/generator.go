@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -418,8 +419,18 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 			mthds := strings.TrimSuffix(node.String(), "()")
 			ids := strings.Split(string(mthds), ".")
 
+			fmt.Println(">>> ", ids)
+
 			if len(ids) == 2 {
+				fmt.Println("SPLIT IS DONE FOR", ids[0], ids[1])
 				outputFunctionInvoke(ids[0], ids[1])
+			}
+
+			isPuts := strings.Contains(mthds, "puts")
+			if isPuts {
+				rgx := regexp.MustCompile(`\((.*?)\)`)
+				rs := rgx.FindStringSubmatch(mthds)
+				outputStdIo(rs[1])
 			}
 			//methodName := strings.Split(mthds[1], "(")[0]
 		}
@@ -430,7 +441,10 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 		fmt.Println("Context: ", context, node.Arguments, node.Token, node.Function, node.Context, node.String(), node)
 		varNames := node.Arguments
 		if len(varNames) > 0 {
-			outputDynamicVarAdd(node.Arguments[0].String())
+			isIoFunc := strings.Contains(node.Function.String(), "puts")
+			if !isIoFunc {
+				outputDynamicVarAdd(node.Arguments[0].String())
+			}
 		}
 		fmt.Println("^^^^^^^&&&&&&&&")
 		if err != nil {
@@ -1182,6 +1196,13 @@ func endFunction(functionName string) {
 
 	methodHashMap["` + functionName + `"] = ` + getCurrentVariable() + `
 	`
+	appendToFile(src)
+}
+
+func outputStdIo(value string) {
+	src := `
+	io := chidorilib.IO{Puts: "` + value + `"}
+	io.Out()`
 	appendToFile(src)
 }
 
