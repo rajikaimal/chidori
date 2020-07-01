@@ -965,6 +965,8 @@ func createMainFunc() {
 	src := `package main
  
 import "github.com/goruby/goruby/object"
+import "github.com/goruby/goruby/chidorilib"
+
 func main() { 
 	env := object.NewMainEnvironment()`
 	appendToFile(src)
@@ -1128,7 +1130,9 @@ func outputDynamicVarAdd(varName string) {
 func outputDynamicVarAssignment(objectName string, varName, varValue string) {
 	src := `
 	` + getNewVariableName() + ` := programValuesList.Object["` + objectName + `"]
-	` + getCurrentVariable() + `.SetInstanceVariableDy(` + getCurrentVariable() + `.Class, "` + varName + `", "` + varValue + `")`
+	` + getCurrentVariable() + `.SetInstanceVariableDy(` + getCurrentVariable() + `.Class, "` + varName + `", "` + varValue + `")
+	io := chidorilib.IO{Puts: ` + getCurrentVariable() + `.GetInstanceVariables()}
+	io.Out()`
 	appendToFile(src)
 }
 
@@ -1177,6 +1181,14 @@ func outputFunctionInvoke(objectName string, methodName string) {
 	appendToFile(src)
 }
 
+func outputInstanceVaribleAccess(objectName string, variableName string) {
+	src := `
+	` + getNewVariableName() + ` := programValuesList.Object["` + objectName + `"]
+	` + getCurrentVariable() + `.GetInstanceVariable(` + variableName + `)
+	`
+	appendToFile(src)
+}
+
 func outputFunction(className string, functionName string) {
 	methodVar := getNewVariableName()
 	src := `
@@ -1200,9 +1212,21 @@ func endFunction(functionName string) {
 }
 
 func outputStdIo(value string) {
-	src := `
-	io := chidorilib.IO{Puts: "` + value + `"}
-	io.Out()`
+	isInstanceVariable := strings.Contains(value, "@")
+
+	src := ""
+	if isInstanceVariable {
+		src = `
+			io := chidorilib.IO{Puts: o.GetInstanceVariableByName("` + value + `")}
+			io.Out()	
+		`
+	} else {
+		src = `
+			io := chidorilib.IO{Puts: "` + value + `"}
+			io.Out()`
+
+	}
+
 	appendToFile(src)
 }
 

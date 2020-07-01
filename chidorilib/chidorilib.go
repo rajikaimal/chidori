@@ -80,6 +80,8 @@ func (c *Class) Call(objectName string) Object {
 
 type Obj interface {
 	GetInstanceVariables() map[string]string
+	GetInstanceVariableByName(name string)
+	GetMethods() map[string]Method
 	SetInstanceVariables(name string, value string)
 	SetInstanceVariableDy(name string, value string)
 	Invoke()
@@ -97,6 +99,14 @@ type Object struct {
 
 func (o *Object) GetInstanceVariables() map[string]string {
 	return o.InstanceVariables
+}
+
+func (o *Object) GetInstanceVariableByName(name string) string {
+	return o.InstanceVariables[name]
+}
+
+func (o *Object) GetMethods() map[string]Method {
+	return o.Methods
 }
 
 func (o *Object) SetInstanceVariables(name string, value string) {
