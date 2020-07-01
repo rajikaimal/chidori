@@ -50,6 +50,7 @@ var firstIter = true
 var existingArrays = make(map[string]string)
 var classes = make(map[string]bool)
 var currentClass = ""
+var isLastValIdent bool = false
 
 // Eval evaluates the given node and traverses recursive over its children
 func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
@@ -299,6 +300,7 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 			fmt.Println("Here setting Identifier:", left, right)
 			right = expandToArrayIfNeeded(right)
 			fmt.Println("LEFT RIGHT", left, left.Value, right)
+			fmt.Println("ENV", left.Token.Literal)
 			outputValue(left.Value, right, env)
 			//appendToFile("\tenv.Set(\"" + left.Value + "\", right)")
 			env.Set(left.Value, right)
@@ -452,7 +454,7 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 		}
 		callContext := &callContext{object.NewCallContext(env, context)}
 		//callContext := &callContext{object.NewCallContext(env, context)}
-		fmt.Println("This is callcontext:", callContext)
+		fmt.Println("This is end of callcontext:", callContext)
 		//res, err := object.Send(callContext, node.Function.Value, args...)
 		//fmt.Println("********* ", res, err)
 		return nil, nil
@@ -960,8 +962,14 @@ func endMainFunc() {
 }
 
 func outputValue(value string, right object.RubyObject, env object.Environment) {
+	if isLastValIdent {
+		appendToFile("\tenv.Set(\"" + value + "\", " + right.Inspect() + ")")
+		isLastValIdent = false
+		return
+	}
 	isClassInstantiate, _ := env.Get("isClassInstantiate")
 	if isClassInstantiate != nil {
+		isLastValIdent = false
 		isNewClass := isClassInstantiate.(*object.Boolean)
 
 		if isNewClass.Value {
@@ -972,11 +980,7 @@ func outputValue(value string, right object.RubyObject, env object.Environment) 
 			`
 			appendToFile(src)
 		}
-
-		return
 	}
-
-	appendToFile("\tenv.Set(\"" + value + "\", " + right.Inspect() + ")")
 }
 
 func outputInteger(value int64) object.RubyObject {
@@ -986,6 +990,7 @@ func outputInteger(value int64) object.RubyObject {
 	` + newVar + ` := object.NewInteger(` + strconv.FormatInt(int64(value), 10) + `)`
 	appendToFile(src)
 	stringObj := &object.String{Value: newVar}
+	isLastValIdent = true
 	return stringObj
 }
 
@@ -1058,6 +1063,7 @@ func outputForLoop(condition ast.Expression, env object.Environment) error {
 }
 
 func outputInfixIdentifers(right ast.Node, left ast.Node, operator string) string {
+	fmt.Println(" **** ()()()(() Generating infix", right)
 	appendToFile(`
 	` + right.String() + `Val, _ := ` + right.String() + `.(*object.Integer)
 	`)
