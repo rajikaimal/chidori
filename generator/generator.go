@@ -1128,11 +1128,12 @@ func outputDynamicVarAdd(varName string) {
 }
 
 func outputDynamicVarAssignment(objectName string, varName, varValue string) {
+	ioVar := getNewVariableName()
 	src := `
-	` + getNewVariableName() + ` := programValuesList.Object["` + objectName + `"]
-	` + getCurrentVariable() + `.SetInstanceVariableDy(` + getCurrentVariable() + `.Class, "` + varName + `", "` + varValue + `")
-	io := chidorilib.IO{Puts: ` + getCurrentVariable() + `.GetInstanceVariables()}
-	io.Out()`
+	` + ioVar + ` := programValuesList.Object["` + objectName + `"]
+	` + getCurrentVariable() + `.SetInstanceVariableDy(` + ioVar + `.Class, "` + varName + `", "` + varValue + `")
+	io` + getNewVariableName() + ` := chidorilib.IO{Puts: ` + ioVar + `.GetInstanceVariables()}
+	io` + getCurrentVariable() + `.Out()`
 	appendToFile(src)
 }
 
