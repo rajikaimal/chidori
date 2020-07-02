@@ -10,14 +10,15 @@ type Value struct {
 
 type Cls interface {
 	GetClassVariables() map[string]string
-	SetInstanceVariable(varName string)
+	SetInstanceVariables(varName string)
 	Call() Object
 }
 
 type Class struct {
 	ClassName      string
 	ClassVariables map[string]string
-	InstanceVar    map[string]string
+	InstanceVar    map[string]int
+	InstanceVarArr []string
 	Methods        map[string]Method
 }
 
@@ -45,13 +46,22 @@ func (c *Class) GetClassVariables() map[string]string {
 	return c.ClassVariables
 }
 
-func (c *Class) SetInstanceVariable(variableName string) {
-	instanceHashMap := c.InstanceVar
-	if instanceHashMap == nil {
-		c.InstanceVar = make(map[string]string)
+func (c *Class) SetInstanceVariables(variables map[string]string) {
+	c.InstanceVar = make(map[string]int)
+
+	//noOfVariables := len(variables)
+	//variableSlice := make([]string, noOfVariables)
+	var variableSlice []string
+
+	arrIndex := 0
+
+	for k, v := range variables {
+		variableSlice = append(variableSlice, v)
+		c.InstanceVar[k] = arrIndex
+		arrIndex++
 	}
 
-	c.InstanceVar[variableName] = ""
+	c.InstanceVarArr = variableSlice
 }
 
 func (c *Class) Call(objectName string) Object {
@@ -82,7 +92,7 @@ type Obj interface {
 	GetInstanceVariables() map[string]string
 	GetInstanceVariableByName(name string)
 	GetMethods() map[string]Method
-	SetInstanceVariables(name string, value string)
+	//SetInstanceVariables(name string, value string)
 	SetInstanceVariableDy(name string, value string)
 	Invoke()
 	AddMethod(m Method) bool
@@ -98,29 +108,30 @@ type Object struct {
 }
 
 func (o *Object) GetInstanceVariables() map[string]string {
-	return o.InstanceVariables
+	instanceVariables := make(map[string]string)
+	for k, v := range o.Class.InstanceVar {
+		instanceVariables[k] = o.Class.InstanceVarArr[v]
+	}
+	return instanceVariables
 }
 
 func (o *Object) GetInstanceVariableByName(name string) string {
-	return o.InstanceVariables[name]
+	variableSliceIdx := o.Class.InstanceVar[name]
+
+	return o.Class.InstanceVarArr[variableSliceIdx]
 }
 
 func (o *Object) GetMethods() map[string]Method {
 	return o.Methods
 }
 
-func (o *Object) SetInstanceVariables(name string, value string) {
-	o.InstanceVariables[name] = value
-}
-
+//func (o *Object) SetInstanceVariables(name string, value string) {
+//	o.InstanceVariables[name] = value
+//}
+//
 func (o *Object) SetInstanceVariableDy(class Class, name string, value string) {
-	instanceAttr := class.InstanceVar[name]
-
-	if instanceAttr == "" {
-		o.InstanceVariables[name] = value
-		return
-	}
-
+	//not supported in optimized version
+	return
 }
 
 func (o *Object) Invoke(methodName string) {
