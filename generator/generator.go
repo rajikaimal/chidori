@@ -1016,7 +1016,7 @@ func outputString(left string, right string, env object.Environment) object.Ruby
 
 	if ok {
 		if functionExists.Value {
-			src := `o.SetInstanceVariables("` + left + `", "` + right + `")`
+			src := `instanceVars["` + left + `"] = "` + right + `"`
 			appendToFile(src)
 			return nil
 		}
@@ -1199,13 +1199,17 @@ func outputFunction(className string, functionName string) {
 		nil,
 	}
 
-	` + getCurrentVariable() + `.Body = func(o chidorilib.Object) {`
+	` + getCurrentVariable() + `.Body = func(o *chidorilib.Object) {
+	instanceVars := make(map[string]string)
+	`
 
 	appendToFile(src)
 }
 
 func endFunction(functionName string) {
-	src := `}
+	src := `
+	o.SetInstanceVariables(instanceVars)
+	}
 
 	methodHashMap["` + functionName + `"] = ` + getCurrentVariable() + `
 	`
