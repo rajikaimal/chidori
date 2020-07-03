@@ -1222,14 +1222,12 @@ func outputStdIo(value string) {
 	src := ""
 	if isInstanceVariable {
 		src = `
-			io := chidorilib.IO{Puts: o.GetInstanceVariableByName("` + value + `")}
-			io.Out()	
+			chidorilib.IO{Puts: o.GetInstanceVariableByName("` + value + `")}.Out()
 		`
 	} else {
 		src = `
-			io := chidorilib.IO{Puts: "` + value + `"}
-			io.Out()`
-
+			chidorilib.IO{Puts: "` + value + `"}.Out()
+		`
 	}
 
 	appendToFile(src)
