@@ -24,26 +24,6 @@ type Class struct {
 	MethodsArr     []Method
 }
 
-func (c *Class) AddMethod(m Method) bool {
-	if c != nil {
-		methodExists := false
-		for k, _ := range c.Methods {
-			if k == m.Name {
-				methodExists = true
-			}
-		}
-
-		if !methodExists {
-			c.Methods[m.Name] = m
-			return true
-		} else {
-			return false
-		}
-	} else {
-		return false
-	}
-}
-
 func (c *Class) GetClassVariables() map[string]string {
 	return c.ClassVariables
 }
