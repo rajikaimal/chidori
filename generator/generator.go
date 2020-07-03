@@ -1218,12 +1218,12 @@ func outputStdIo(value string) {
 	src := ""
 	if isInstanceVariable {
 		src = `
-			io := chidorilib.IO{Puts: o.GetInstanceVariableByName("` + value + `")}
+			chidorilib.IO{Puts: o.GetInstanceVariableByName("` + value + `")}.Out()
 			io.Out()	
 		`
 	} else {
 		src = `
-			io := chidorilib.IO{Puts: "` + value + `"}
+			chidorilib.IO{Puts: "` + value + `"}.Out()
 			io.Out()`
 
 	}
