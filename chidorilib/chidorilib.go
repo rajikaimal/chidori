@@ -20,6 +20,8 @@ type Class struct {
 	InstanceVar    map[string]int
 	InstanceVarArr []string
 	Methods        map[string]Method
+	MethodsMap     map[string]int
+	MethodsArr     []Method
 }
 
 func (c *Class) AddMethod(m Method) bool {
@@ -65,6 +67,18 @@ func (c *Class) SetInstanceVariables(variables map[string]string) {
 }
 
 func (c *Class) Call(objectName string) Object {
+	var methodSlice []Method
+	arrIndex := 0
+	c.MethodsMap = make(map[string]int)
+
+	for k, v := range c.Methods {
+		methodSlice = append(methodSlice, v)
+		c.MethodsMap[k] = arrIndex
+		arrIndex++
+	}
+
+	c.MethodsArr = methodSlice
+
 	obj := Object{
 		Class: Class{
 			ClassName:      c.ClassName,
@@ -72,6 +86,8 @@ func (c *Class) Call(objectName string) Object {
 			InstanceVar:    c.InstanceVar,
 			InstanceVarArr: c.InstanceVarArr,
 			Methods:        c.Methods,
+			MethodsMap:     c.MethodsMap,
+			MethodsArr:     c.MethodsArr,
 		},
 		ObjectName:        objectName,
 		InstanceVariables: make(map[string]string),
@@ -95,7 +111,7 @@ type Obj interface {
 	GetMethods() map[string]Method
 	//SetInstanceVariables(name string, value string)
 	SetInstanceVariableDy(name string, value string)
-	Invoke()
+	Invoke(methodName string)
 	AddMethod(m Method) bool
 }
 
@@ -136,11 +152,12 @@ func (o *Object) SetInstanceVariableDy(class Class, name string, value string) {
 }
 
 func (o *Object) Invoke(methodName string) {
-	method := o.Methods[methodName]
+	methodIdx := o.MethodsMap[methodName]
+
+	method := o.MethodsArr[methodIdx]
 	if method.Name != "" {
 		method.Body(o)
 	}
-
 }
 
 func (o *Object) AddMethod(m Method) bool {
