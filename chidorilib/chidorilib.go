@@ -70,6 +70,7 @@ func (c *Class) Call(objectName string) Object {
 			ClassName:      c.ClassName,
 			ClassVariables: c.ClassVariables,
 			InstanceVar:    c.InstanceVar,
+			InstanceVarArr: c.InstanceVarArr,
 			Methods:        c.Methods,
 		},
 		ObjectName:        objectName,
@@ -78,7 +79,7 @@ func (c *Class) Call(objectName string) Object {
 
 	init := obj.Methods["initialize"]
 	if init.Name != "" {
-		init.Body(obj)
+		init.Body(&obj)
 	}
 
 	if obj.InstanceVariables == nil {
@@ -137,7 +138,7 @@ func (o *Object) SetInstanceVariableDy(class Class, name string, value string) {
 func (o *Object) Invoke(methodName string) {
 	method := o.Methods[methodName]
 	if method.Name != "" {
-		method.Body(*o)
+		method.Body(o)
 	}
 
 }
@@ -165,7 +166,7 @@ func (o *Object) AddMethod(m Method) bool {
 type Method struct {
 	Name      string
 	BelongsTo string
-	Body      func(o Object)
+	Body      func(o *Object)
 }
 
 type IO struct {
