@@ -102,7 +102,11 @@ func (o *Object) GetInstanceVariables() map[string]string {
 }
 
 func (o *Object) GetInstanceVariableByName(name string) string {
-	return o.InstanceVariables[name]
+	if _, ok := o.InstanceVariables[name]; ok {
+		return o.InstanceVariables[name]
+	}
+
+	return ""
 }
 
 func (o *Object) GetMethods() map[string]Method {
