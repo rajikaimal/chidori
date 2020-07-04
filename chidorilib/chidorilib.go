@@ -113,9 +113,14 @@ func (o *Object) GetInstanceVariables() map[string]string {
 }
 
 func (o *Object) GetInstanceVariableByName(name string) string {
-	variableSliceIdx := o.Class.InstanceVar[name]
+	if _, ok := o.Class.InstanceVar[name]; ok {
+		variableSliceIdx := o.Class.InstanceVar[name]
 
-	return o.Class.InstanceVarArr[variableSliceIdx]
+		fmt.Println(name, variableSliceIdx)
+		return o.Class.InstanceVarArr[variableSliceIdx]
+	}
+
+	return ""
 }
 
 func (o *Object) GetMethods() map[string]Method {
