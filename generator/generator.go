@@ -968,7 +968,8 @@ import "github.com/goruby/goruby/object"
 import "github.com/goruby/goruby/chidorilib"
 
 func main() { 
-	env := object.NewMainEnvironment()`
+	env := object.NewMainEnvironment()
+	_, _ = env.Get("")`
 	appendToFile(src)
 }
 
