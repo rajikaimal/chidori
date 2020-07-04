@@ -1200,16 +1200,27 @@ func outputFunction(className string, functionName string) {
 	}
 
 	` + getCurrentVariable() + `.Body = func(o *chidorilib.Object) {
-	instanceVars := make(map[string]string)
 	`
+
+	if functionName == "initialize" {
+		src = src + `instanceVars := make(map[string]string)
+	`
+	}
 
 	appendToFile(src)
 }
 
 func endFunction(functionName string) {
-	src := `
-	o.SetInstanceVariables(instanceVars)
+	src := ""
+	if functionName == "initialize" {
+		src = src + `
+			o.SetInstanceVariables(instanceVars)
+		}
+		`
+	} else {
+		src = src + `}`
 	}
+	src = src + `
 
 	methodHashMap["` + functionName + `"] = ` + getCurrentVariable() + `
 	`
