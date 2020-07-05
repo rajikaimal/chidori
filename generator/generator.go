@@ -423,7 +423,11 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 
 			if len(ids) == 2 {
 				fmt.Println("SPLIT IS DONE FOR", ids[0], ids[1])
-				outputFunctionInvoke(ids[0], ids[1])
+				if strings.Contains(ids[1], "push") {
+					outputDynamicArray(ids[1])
+				} else {
+					outputFunctionInvoke(ids[0], ids[1])
+				}
 			}
 
 			isPuts := strings.Contains(mthds, "puts")
@@ -1065,7 +1069,8 @@ func outputArray(exps []ast.Expression, env object.Environment, identifier strin
 	}
 	newVar := getNewVariableName()
 	src := `
-	` + newVar + ` := &object.Array{Elements: result}`
+	` + newVar + ` := &object.Array{Elements: result}
+	chidorilib.IO{Puts: ` + getCurrentVariable() + `.Inspect()}.Out()`
 	appendToFile(src)
 	return newVar, nil
 }
@@ -1118,6 +1123,14 @@ func outputInfixString(left object.RubyObject, nLeft ast.Expression, right objec
 }
 
 func outputDynamicVarAdd(varName string) {
+	if currentClass == "" {
+		src := `
+		` + getNewVariableName() + ` := &object.Array{Elements: result}
+		chidorilib.IO{Puts: ` + getCurrentVariable() + `.Inspect()}.Out()
+		`
+		appendToFile(src)
+		return
+	}
 	variable := varName[1:]
 	variable = "@" + variable
 	src := `
@@ -1181,6 +1194,20 @@ func outputFunctionInvoke(objectName string, methodName string) {
 	` + getCurrentVariable() + `.Invoke("` + methodName + `")
 	`
 	appendToFile(src)
+}
+
+func outputDynamicArray(value string) {
+	value = match(value)
+	src := `
+		result = append(result, &object.String{Value: "` + value + `"})
+	`
+	appendToFile(src)
+}
+
+func match(s string) string {
+	var rgx = regexp.MustCompile(`\((.*?)\)`)
+	rs := rgx.FindStringSubmatch(s)
+	return rs[1]
 }
 
 func outputInstanceVaribleAccess(objectName string, variableName string) {
