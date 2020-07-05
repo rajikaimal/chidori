@@ -53,6 +53,7 @@ var classes = make(map[string]bool)
 var currentClass = ""
 var isLastValIdent bool = false
 var isLoop = false
+var arrVar = ""
 
 // Eval evaluates the given node and traverses recursive over its children
 func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
@@ -1053,8 +1054,9 @@ func outputGetIdentifier(node ast.Node) string {
 func outputArray(exps []ast.Expression, env object.Environment, identifier string) (string, error) {
 	exists := existingArrays[identifier]
 	if len(exists) == 0 {
+		arrVar = getNewVariableName()
 		appendToFile(`
-	var result []object.RubyObject`)
+	var result` + arrVar + ` []object.RubyObject`)
 	}
 	for _, e := range exps {
 		fmt.Println("^^^^^^ STARTING EVA^^^^^^ STARTING EVALL")
@@ -1070,13 +1072,13 @@ func outputArray(exps []ast.Expression, env object.Environment, identifier strin
 		//result = append(result, ` + evaluated.Inspect() + `)`)
 
 		appendToFile(`
-		result = append(result, &object.String{Value:"` + evalString + `"})`)
+		result` + arrVar + ` = append(result` + arrVar + `, &object.String{Value:"` + evalString + `"})`)
 	}
 	newVar := getNewVariableName()
 	src := `
-	arr := make([]object.RubyObject, len(result))
-	copy(arr[:], result)
-	` + newVar + ` := &object.Array{Elements: arr}
+	arr` + arrVar + ` := make([]object.RubyObject, len(result` + arrVar + `))
+	copy(arr` + arrVar + `[:], result` + arrVar + `)
+	` + newVar + ` := &object.Array{Elements: arr` + arrVar + `}
 	chidorilib.IO{Puts: ` + newVar + `.Inspect()}.Out()`
 	//important: setting true last identifier
 	isLastValIdent = true
