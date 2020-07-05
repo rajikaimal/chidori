@@ -52,6 +52,7 @@ var existingArrays = make(map[string]string)
 var classes = make(map[string]bool)
 var currentClass = ""
 var isLastValIdent bool = false
+var arrVar = ""
 
 // Eval evaluates the given node and traverses recursive over its children
 func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
@@ -1048,8 +1049,9 @@ func outputGetIdentifier(node ast.Node) string {
 func outputArray(exps []ast.Expression, env object.Environment, identifier string) (string, error) {
 	exists := existingArrays[identifier]
 	if len(exists) == 0 {
+		arrVar = getNewVariableName()
 		appendToFile(`
-	var result []object.RubyObject`)
+	var result` + arrVar + ` []object.RubyObject`)
 	}
 	for _, e := range exps {
 		fmt.Println("^^^^^^ STARTING EVA^^^^^^ STARTING EVALL")
@@ -1065,11 +1067,11 @@ func outputArray(exps []ast.Expression, env object.Environment, identifier strin
 		//result = append(result, ` + evaluated.Inspect() + `)`)
 
 		appendToFile(`
-		result = append(result, &object.String{Value:"` + evalString + `"})`)
+		result` + arrVar + ` = append(result` + arrVar + `, &object.String{Value:"` + evalString + `"})`)
 	}
 	newVar := getNewVariableName()
 	src := `
-	` + newVar + ` := &object.Array{Elements: result}
+	` + newVar + ` := &object.Array{Elements: result` + arrVar + `}
 	chidorilib.IO{Puts: ` + getCurrentVariable() + `.Inspect()}.Out()`
 	appendToFile(src)
 	return newVar, nil
@@ -1125,7 +1127,7 @@ func outputInfixString(left object.RubyObject, nLeft ast.Expression, right objec
 func outputDynamicVarAdd(varName string) {
 	if currentClass == "" {
 		src := `
-		` + getNewVariableName() + ` := &object.Array{Elements: result}
+		` + getNewVariableName() + ` := &object.Array{Elements: result` + arrVar + `}
 		chidorilib.IO{Puts: ` + getCurrentVariable() + `.Inspect()}.Out()
 		`
 		appendToFile(src)
@@ -1199,7 +1201,7 @@ func outputFunctionInvoke(objectName string, methodName string) {
 func outputDynamicArray(value string) {
 	value = match(value)
 	src := `
-		result = append(result, &object.String{Value: "` + value + `"})
+		result` + arrVar + ` = append(result` + arrVar + `, &object.String{Value: "` + value + `"})
 	`
 	appendToFile(src)
 }
