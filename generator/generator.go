@@ -1065,7 +1065,11 @@ func outputArray(exps []ast.Expression, env object.Environment, identifier strin
 	}
 	newVar := getNewVariableName()
 	src := `
-	` + newVar + ` := &object.Array{Elements: result}`
+	arr := make([]object.RubyObject, len(result))
+	copy(arr[:], result)
+	` + newVar + ` := &object.Array{Elements: result}
+	chidorilib.IO{Puts: ` + newVar + `.Inspect()}.Out()`
+
 	appendToFile(src)
 	return newVar, nil
 }
