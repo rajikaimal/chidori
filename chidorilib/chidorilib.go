@@ -116,7 +116,6 @@ func (o *Object) GetInstanceVariableByName(name string) string {
 	if _, ok := o.Class.InstanceVar[name]; ok {
 		variableSliceIdx := o.Class.InstanceVar[name]
 
-		fmt.Println(name, variableSliceIdx)
 		return o.Class.InstanceVarArr[variableSliceIdx]
 	}
 
