@@ -52,6 +52,7 @@ var existingArrays = make(map[string]string)
 var classes = make(map[string]bool)
 var currentClass = ""
 var isLastValIdent bool = false
+var isLoop = false
 
 // Eval evaluates the given node and traverses recursive over its children
 func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
@@ -218,6 +219,7 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 		if err != nil {
 			return nil, errors.WithMessage(err, "Output array is nil")
 		}
+		fmt.Println("RETURNINGGG... ", variableName)
 		return &object.String{Value: variableName}, nil
 	case *ast.HashLiteral:
 		fmt.Println("HashLiteral:")
@@ -1035,6 +1037,13 @@ func outputString(left string, right string, env object.Environment) object.Ruby
 func outputGetIdentifier(node ast.Node) string {
 	//TODO: Don't disregard ok
 	src := "\t" + node.String() + ", _ := env.Get(\"" + node.String() + "\") \n"
+	fmt.Println("LOOP? ", isLoop)
+	if isLoop {
+		src = `
+		` + node.String() + `, _ := env.Get("` + node.String() + `")
+		chidorilib.IO{Puts: ` + node.String() + `.Inspect()}.Out()`
+	}
+
 	//src = src + "\tfmt.Println(" + node.String() + ")"
 	appendToFile(src)
 
@@ -1067,9 +1076,10 @@ func outputArray(exps []ast.Expression, env object.Environment, identifier strin
 	src := `
 	arr := make([]object.RubyObject, len(result))
 	copy(arr[:], result)
-	` + newVar + ` := &object.Array{Elements: result}
+	` + newVar + ` := &object.Array{Elements: arr}
 	chidorilib.IO{Puts: ` + newVar + `.Inspect()}.Out()`
-
+	//important: setting true last identifier
+	isLastValIdent = true
 	appendToFile(src)
 	return newVar, nil
 }
@@ -1080,6 +1090,7 @@ func outputForLoop(condition ast.Expression, env object.Environment) error {
 	for ` + generatedCondition.Inspect() + ` {
 	`
 	appendToFile(src)
+	isLoop = true
 	return nil
 }
 
@@ -1098,6 +1109,7 @@ func outputInfixIdentifers(right ast.Node, left ast.Node, operator string) strin
 func outputLoopEnd() {
 	src := "}"
 
+	isLoop = false
 	appendToFile(src)
 }
 
