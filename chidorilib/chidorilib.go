@@ -131,8 +131,9 @@ func (o *Object) GetMethods() map[string]Method {
 //}
 //
 func (o *Object) SetInstanceVariableDy(class Class, name string, value string) {
-	//not supported in optimized version
-	return
+	arrIdx := class.InstanceVar[name]
+	fmt.Println(arrIdx)
+	class.InstanceVarArr[arrIdx] = value
 }
 
 func (o *Object) Invoke(methodName string) {
