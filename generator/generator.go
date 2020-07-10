@@ -716,22 +716,16 @@ func evalMinusPrefixOperatorExpression(right object.RubyObject) (object.RubyObje
 }
 
 func evalConditionalExpression(ce *ast.ConditionalExpression, env object.Environment) (object.RubyObject, error) {
-	fmt.Println("Eval condition expr:", ce.Condition)
-	condition, err := Eval(ce.Condition, env)
-	if err != nil {
-		return nil, err
+	fmt.Println("^^^^Eval condition expr:", ce.Condition, ce.Consequence, ce.Alternative)
+	outputIfStatementConsequence(ce.Condition)
+	_, _ = Eval(ce.Consequence, env)
+	outputIfStatementEnd()
+	if ce.Alternative != nil {
+		outputIfStatementElse()
+		_, _ = Eval(ce.Alternative, env)
+		outputIfStatementEnd()
 	}
-	evaluateConsequence := isTruthy(condition)
-	if ce.IsNegated() {
-		evaluateConsequence = !evaluateConsequence
-	}
-	if evaluateConsequence {
-		return Eval(ce.Consequence, env)
-	} else if ce.Alternative != nil {
-		return Eval(ce.Alternative, env)
-	} else {
-		return object.NIL, nil
-	}
+	return nil, nil
 }
 
 func evalIndexExpressionAssignment(left, index, right object.RubyObject) (object.RubyObject, error) {
@@ -1246,6 +1240,36 @@ func endFunction(functionName string) {
 	appendToFile(src)
 }
 
+func outputIfStatementConsequence(condition ast.Expression) {
+	conditionString := match(condition.String())
+	conditionTokens := strings.Fields(conditionString)
+
+	conditionVar := conditionTokens[0]
+	conditionRight := strings.Join(conditionTokens[1:], " ")
+	src := `
+	if ` + conditionVar + `Val.Value ` + conditionRight + `{
+	`
+
+	appendToFile(src)
+}
+
+func outputIfStatementEnd() {
+	src := "}"
+	appendIfToFile(src)
+}
+
+func outputIfStatementElse() {
+	src := `else {`
+
+	appendToFile(src)
+}
+
+func match(s string) string {
+	var rgx = regexp.MustCompile(`\((.*?)\)`)
+	rs := rgx.FindStringSubmatch(s)
+	return rs[1]
+}
+
 func outputStdIo(value string) {
 	isInstanceVariable := strings.Contains(value, "@")
 
@@ -1283,6 +1307,20 @@ func appendToFile(content string) {
 	defer f.Close()
 
 	if _, err = f.WriteString(content + "\n"); err != nil {
+		panic(err)
+	}
+}
+
+func appendIfToFile(content string) {
+	f, err := os.OpenFile("compiled.go", os.O_APPEND|os.O_WRONLY, 0600)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer f.Close()
+
+	if _, err = f.WriteString(content); err != nil {
 		panic(err)
 	}
 }
