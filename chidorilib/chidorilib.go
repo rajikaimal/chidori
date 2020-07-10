@@ -118,12 +118,7 @@ func (o *Object) SetInstanceVariables(name string, value string) {
 }
 
 func (o *Object) SetInstanceVariableDy(class Class, name string, value string) {
-	instanceAttr := class.InstanceVar[name]
-
-	if instanceAttr == "" {
-		o.InstanceVariables[name] = value
-		return
-	}
+	o.InstanceVariables[name] = value
 }
 
 func (o *Object) Invoke(methodName string) {
