@@ -124,7 +124,6 @@ func (o *Object) SetInstanceVariableDy(class Class, name string, value string) {
 		o.InstanceVariables[name] = value
 		return
 	}
-
 }
 
 func (o *Object) Invoke(methodName string) {
