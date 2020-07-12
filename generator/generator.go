@@ -489,17 +489,9 @@ func Eval(node ast.Node, env object.Environment) (object.RubyObject, error) {
 		callContext := &callContext{object.NewCallContext(env, self)}
 		return self.Block.Call(callContext, args...)
 	case *ast.IndexExpression:
-		fmt.Println("IndexExpression:", node)
-		left, err := Eval(node.Left, env)
-		fmt.Println("IndexExpression:", left)
-		if err != nil {
-			return nil, errors.WithMessage(err, "eval IndexExpression left side")
-		}
-		index, err := Eval(node.Index, env)
-		if err != nil {
-			return nil, errors.WithMessage(err, "eval IndexExpression index")
-		}
-		return evalIndexExpression(left, index)
+		fmt.Println(">>> IndexExpression:", node, node.Left, node.Index)
+		outputArrayIndexAccess(node.Left.String(), node.Index.String())
+		return nil, nil
 	case *ast.PrefixExpression:
 		fmt.Println("PrefixExpression:", node)
 		right, err := Eval(node.Right, env)
@@ -1077,6 +1069,21 @@ func outputArray(exps []ast.Expression, env object.Environment, identifier strin
 	//important: setting true last identifier
 	isLastValIdent = true
 	return newVar, nil
+}
+
+func outputArrayIndexAccess(arrName string, arrIdx string) {
+	src := ""
+	if _, err := strconv.Atoi(arrIdx); err == nil {
+		src = src + `
+	` + arrName + ` := &object.Array{Elements: result` + arrVar + `}
+	chidorilib.IO{Puts: ` + arrName + `.Elements[` + arrIdx + `].Inspect()}.Out()`
+	} else {
+		src = `
+	` + arrName + ` := &object.Array{Elements: result` + arrVar + `}
+	chidorilib.IO{Puts: ` + arrName + `.Elements[` + arrIdx + `Val.Value].Inspect()}.Out()`
+	}
+
+	appendToFile(src)
 }
 
 func outputForLoop(condition ast.Expression, env object.Environment) error {
