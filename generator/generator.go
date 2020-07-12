@@ -1050,10 +1050,10 @@ func outputArray(exps []ast.Expression, env object.Environment, identifier strin
 	if len(exists) == 0 {
 		arrVar = getNewVariableName()
 		appendToFile(`
-	var result` + arrVar + ` []object.RubyObject`)
+		result` + arrVar + ` := make([]object.RubyObject, ` + strconv.Itoa(len(exps)) + `)`)
 	}
-	for _, e := range exps {
-		fmt.Println("^^^^^^ STARTING EVA^^^^^^ STARTING EVALL")
+	for index, e := range exps {
+		fmt.Println("^^^^^^ STARTING EVA^^^^^^ STARTING EVALL", len(exps))
 		evaluated, err := Eval(e, env)
 		evalString := fmt.Sprintf("%v", e)
 		fmt.Println("Evaluated within write ---:", evaluated, reflect.TypeOf(evaluated), reflect.ValueOf(e))
@@ -1066,17 +1066,16 @@ func outputArray(exps []ast.Expression, env object.Environment, identifier strin
 		//result = append(result, ` + evaluated.Inspect() + `)`)
 
 		appendToFile(`
-		result` + arrVar + ` = append(result` + arrVar + `, &object.String{Value:"` + evalString + `"})`)
+		result` + arrVar + `[` + strconv.Itoa(index) + `] = &object.String{Value:"` + evalString + `"}`)
 	}
 	newVar := getNewVariableName()
+
 	src := `
-	arr` + arrVar + ` := make([]object.RubyObject, len(result` + arrVar + `))
-	copy(arr` + arrVar + `[:], result` + arrVar + `)
-	` + newVar + ` := &object.Array{Elements: arr` + arrVar + `}
-	chidorilib.IO{Puts: ` + newVar + `.Inspect()}.Out()`
+	` + newVar + ` := &object.Array{Elements: result` + arrVar + `}
+	chidorilib.IO{Puts: ` + getCurrentVariable() + `.Inspect()}.Out()`
+	appendToFile(src)
 	//important: setting true last identifier
 	isLastValIdent = true
-	appendToFile(src)
 	return newVar, nil
 }
 
