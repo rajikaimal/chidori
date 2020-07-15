@@ -8,17 +8,7 @@ import "os"
 func main() {
 	env := object.NewMainEnvironment()
 	_, _ = env.Get("")
-	now := time.Now()
-	defer func() {
-		timeNow := time.Since(now)
-		f, err := os.OpenFile("time.log",
-			os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		if err != nil {
-		}
-		defer f.Close()
-		if _, err := f.WriteString(timeNow.String() + "\n"); err != nil {
-		}
-	}()
+
 	methodHashMap := make(map[string]chidorilib.Method)
 
 	v1 := chidorilib.Method{
@@ -27,8 +17,12 @@ func main() {
 		nil,
 	}
 
-	v1.Body = func(o chidorilib.Object) {
-		o.SetInstanceVariables("@name", "Rajika")
+	v1.Body = func(o *chidorilib.Object) {
+		instanceVars := make(map[string]string)
+
+		instanceVars["@name"] = "Rajika"
+
+		o.SetInstanceVariables(instanceVars)
 	}
 
 	methodHashMap["initialize"] = v1
@@ -39,10 +33,9 @@ func main() {
 		nil,
 	}
 
-	v2.Body = func(o chidorilib.Object) {
-		o.SetInstanceVariables("@address", "NYC")
+	v2.Body = func(o *chidorilib.Object) {
 
-		chidorilib.IO{Puts: o.GetInstanceVariableByName("@street")}.Out()
+		chidorilib.IO{Puts: o.GetInstanceVariableByName("@name")}.Out()
 
 	}
 
@@ -64,7 +57,7 @@ func main() {
 	v5 := object.NewInteger(0)
 	env.Set("i", v5)
 
-	v6 := object.NewInteger(4)
+	v6 := object.NewInteger(10000)
 	env.Set("a", v6)
 	i, _ := env.Get("i")
 
@@ -83,39 +76,25 @@ func main() {
 		iVal = iVal_
 		v8 := iVal_.Value + v7.Value
 		env.Set("i", &object.Integer{Value: v8})
+		now := time.Now()
+		defer func() {
+			timeNow := time.Since(now)
+			f, err := os.OpenFile("time.log",
+				os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+			}
+			defer f.Close()
+			if _, err := f.WriteString(timeNow.String() + "\n"); err != nil {
+			}
+		}()
 
 		v9 := programValuesList.Class["Customer"]
-		v9.SetInstanceVariable("@street")
 
-		v10 := programValuesList.Class["Customer"]
+		v10 := v9.Call("cust")
+		programValuesList.Object["cust"] = v10
 
-		v11 := v10.Call("cust")
-		programValuesList.Object["cust"] = v11
-
-		v12 := programValuesList.Object["cust"]
-		v12.SetInstanceVariableDy(v12.Class, "@street", "dynamic var street")
-		iov13 := chidorilib.IO{Puts: v12.GetInstanceVariables()}
-		iov13.Out()
-
-		v14 := chidorilib.Method{
-			"dynamicMethod",
-			"main",
-			nil,
-		}
-
-		v14.Body = func(o chidorilib.Object) {
-
-			chidorilib.IO{Puts: o.GetInstanceVariableByName("@a")}.Out()
-
-		}
-
-		methodHashMap["dynamicMethod"] = v14
-
-		v15 := programValuesList.Object["cust"]
-		v15.Invoke("dynamicMethod")
-
-		v16 := programValuesList.Object["cust"]
-		v16.Invoke("foo")
+		v11 := programValuesList.Object["cust"]
+		v11.Invoke("foo")
 
 	}
 }

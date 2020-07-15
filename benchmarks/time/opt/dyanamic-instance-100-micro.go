@@ -9,17 +9,6 @@ func main() {
 	env := object.NewMainEnvironment()
 	_, _ = env.Get("")
 
-	now := time.Now()
-	defer func() {
-		timeNow := time.Since(now)
-		f, err := os.OpenFile("time.log",
-			os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		if err != nil {
-		}
-		defer f.Close()
-		if _, err := f.WriteString(timeNow.String() + "\n"); err != nil {
-		}
-	}()
 	methodHashMap := make(map[string]chidorilib.Method)
 
 	v1 := chidorilib.Method{
@@ -28,8 +17,13 @@ func main() {
 		nil,
 	}
 
-	v1.Body = func(o chidorilib.Object) {
-		o.SetInstanceVariables("@name", "Rajika")
+	v1.Body = func(o *chidorilib.Object) {
+		instanceVars := make(map[string]string)
+
+		instanceVars["@name"] = "Rajika"
+		instanceVars["@street"] = "5th Street"
+
+		o.SetInstanceVariables(instanceVars)
 	}
 
 	methodHashMap["initialize"] = v1
@@ -69,21 +63,22 @@ func main() {
 		iVal = iVal_
 		v7 := iVal_.Value + v6.Value
 		env.Set("i", &object.Integer{Value: v7})
+		now := time.Now()
+		defer func() {
+			timeNow := time.Since(now)
+			f, err := os.OpenFile("time.log",
+				os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+			}
+			defer f.Close()
+			if _, err := f.WriteString(timeNow.String() + "\n"); err != nil {
+			}
+		}()
 
 		v8 := programValuesList.Class["Customer"]
-		v8.SetInstanceVariable("@street")
 
-		v9 := programValuesList.Class["Customer"]
+		v9 := v8.Call("cust")
+		programValuesList.Object["cust"] = v9
 
-		v10 := v9.Call("cust")
-		programValuesList.Object["cust"] = v10
-
-		v11 := programValuesList.Object["cust"]
-		v11.SetInstanceVariableDy(v11.Class, "@street", "dynamic var street")
-
-		v13 := programValuesList.Object["cust"]
-		v13.SetInstanceVariableDy(v13.Class, "@street", "5th Avenue")
-		iov14 := chidorilib.IO{Puts: v13.GetInstanceVariables()}
-		iov14.Out()
 	}
 }

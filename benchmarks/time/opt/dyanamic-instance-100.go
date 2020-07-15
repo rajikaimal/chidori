@@ -28,8 +28,13 @@ func main() {
 		nil,
 	}
 
-	v1.Body = func(o chidorilib.Object) {
-		o.SetInstanceVariables("@name", "Rajika")
+	v1.Body = func(o *chidorilib.Object) {
+		instanceVars := make(map[string]string)
+
+		instanceVars["@name"] = "Rajika"
+		instanceVars["@street"] = "5th Street"
+
+		o.SetInstanceVariables(instanceVars)
 	}
 
 	methodHashMap["initialize"] = v1
@@ -50,7 +55,7 @@ func main() {
 	v4 := object.NewInteger(0)
 	env.Set("i", v4)
 
-	v5 := object.NewInteger(10000)
+	v5 := object.NewInteger(100)
 	env.Set("a", v5)
 	i, _ := env.Get("i")
 
@@ -71,19 +76,9 @@ func main() {
 		env.Set("i", &object.Integer{Value: v7})
 
 		v8 := programValuesList.Class["Customer"]
-		v8.SetInstanceVariable("@street")
 
-		v9 := programValuesList.Class["Customer"]
+		v9 := v8.Call("cust")
+		programValuesList.Object["cust"] = v9
 
-		v10 := v9.Call("cust")
-		programValuesList.Object["cust"] = v10
-
-		v11 := programValuesList.Object["cust"]
-		v11.SetInstanceVariableDy(v11.Class, "@street", "dynamic var street")
-
-		v13 := programValuesList.Object["cust"]
-		v13.SetInstanceVariableDy(v13.Class, "@street", "5th Avenue")
-		iov14 := chidorilib.IO{Puts: v13.GetInstanceVariables()}
-		iov14.Out()
 	}
 }

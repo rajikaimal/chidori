@@ -4,10 +4,8 @@ import "github.com/goruby/goruby/object"
 import "github.com/goruby/goruby/chidorilib"
 import "time"
 import "os"
-import "github.com/pkg/profile"
 
 func main() {
-	defer profile.Start().Stop()
 	env := object.NewMainEnvironment()
 	_, _ = env.Get("")
 
@@ -22,26 +20,9 @@ func main() {
 		if _, err := f.WriteString(timeNow.String() + "\n"); err != nil {
 		}
 	}()
-
 	var resultv1 []object.RubyObject
 
-	resultv1 = append(resultv1, &object.String{Value: "Falcon9"})
-
-	resultv1 = append(resultv1, &object.String{Value: "Falcon9"})
-
-	resultv1 = append(resultv1, &object.String{Value: "Falcon9"})
-
-	resultv1 = append(resultv1, &object.String{Value: "Falcon9"})
-
-	resultv1 = append(resultv1, &object.String{Value: "Falcon9"})
-
-	resultv1 = append(resultv1, &object.String{Value: "Falcon9"})
-
-	resultv1 = append(resultv1, &object.String{Value: "Falcon9"})
-
-	resultv1 = append(resultv1, &object.String{Value: "Falcon9"})
-
-	resultv1 = append(resultv1, &object.String{Value: "Falcon9"})
+	resultv1 = append(resultv1, &object.String{Value: "Starlink"})
 
 	resultv1 = append(resultv1, &object.String{Value: "Falcon9"})
 
@@ -51,7 +32,7 @@ func main() {
 	v3 := object.NewInteger(0)
 	env.Set("i", v3)
 
-	v4 := object.NewInteger(100)
+	v4 := object.NewInteger(10000)
 	env.Set("a", v4)
 	i, _ := env.Get("i")
 
@@ -76,7 +57,5 @@ func main() {
 		v7 := &object.Array{Elements: resultv1}
 		chidorilib.IO{Puts: v7.Inspect()}.Out()
 
-		myArr := &object.Array{Elements: resultv1}
-		chidorilib.IO{Puts: myArr.Elements[iVal.Value].Inspect()}.Out()
 	}
 }
