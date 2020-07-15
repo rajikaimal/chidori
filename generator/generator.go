@@ -1027,8 +1027,7 @@ func outputGetIdentifier(node ast.Node) string {
 	fmt.Println("LOOP? ", isLoop)
 	if isLoop {
 		src = `
-		` + node.String() + `, _ := env.Get("` + node.String() + `")
-		chidorilib.IO{Puts: ` + node.String() + `.Inspect()}.Out()`
+		` + node.String() + `, _ := env.Get("` + node.String() + `")`
 	}
 
 	//src = src + "\tfmt.Println(" + node.String() + ")"
