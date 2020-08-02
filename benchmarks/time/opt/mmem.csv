@@ -1,0 +1,2 @@
+Time;Allocated;Total Allocated; System Memory;Num Gc;Heap Allocated;Heap System;Heap Objects;Heap Released;
+%!s(int=1);115560;115560;71387144;0;115560;66846720;596;66428928;

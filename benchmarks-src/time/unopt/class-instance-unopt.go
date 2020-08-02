@@ -15,10 +15,6 @@ func main() {
 		def initialize()
 			@name = "Rajika"
 		end
-		def foo()
-			@address = "NYC"
-			puts(@street)
-		end
 	end
 	i = 0
 	a = 4
@@ -28,9 +24,9 @@ func main() {
 			attr_accessor :street
 		end
 		cust = Customer.new()
-		cust.street = "dynamic var street"
+		cust.street = "5th street"
 		def cust.dynamicMethod
-			puts(@a)
+			puts(@street)
 		end
 		cust.dynamicMethod()
 		cust.foo()

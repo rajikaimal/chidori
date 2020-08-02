@@ -25,10 +25,6 @@ func main() {
 		end
 		cust = Customer.new()
 		cust.street = "dynamic var street"
-		def cust.dynamicMethod
-			puts(@street)
-		end
-		cust.dynamicMethod()
 	end
 	`
 	c := compiler.New()

@@ -47,6 +47,7 @@ func main() {
 	aVal, _ := a.(*object.Integer)
 
 	iVal, _ := i.(*object.Integer)
+	
 
 	for iVal.Value < aVal.Value {
 
@@ -57,7 +58,7 @@ func main() {
 		iVal = iVal_
 		v7 := iVal_.Value + v6.Value
 		env.Set("i", &object.Integer{Value: v7})
-
+		
 		v8 := programValuesList.Class["Customer"]
 
 		v9 := v8.Call("cust")
@@ -76,11 +77,12 @@ func main() {
 		}
 
 		methodHashMap["dynamicMethod"] = v10
-
 		now := time.Now()
+		v11 := programValuesList.Object["cust"]
+		v11.Invoke("dynamicMethod")
 		defer func() {
 			timeNow := time.Since(now)
-			f, err := os.OpenFile("time.log",
+			f, err := os.OpenFile("dynamic-method-100-micro.log",
 				os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 			if err != nil {
 			}
@@ -88,9 +90,5 @@ func main() {
 			if _, err := f.WriteString(timeNow.String() + "\n"); err != nil {
 			}
 		}()
-
-		v11 := programValuesList.Object["cust"]
-		v11.Invoke("dynamicMethod")
-
 	}
 }

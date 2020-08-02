@@ -14,9 +14,10 @@ func main() {
 	class Customer
 		def initialize()
 			@name = "Rajika"
+			@street = "5th street"
 		end
 		def foo
-			puts(@name)
+			puts(@street)
 		end
 	end
 	i = 0

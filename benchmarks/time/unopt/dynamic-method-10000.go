@@ -12,7 +12,7 @@ func main() {
 	now := time.Now()
 	defer func() {
 		timeNow := time.Since(now)
-		f, err := os.OpenFile("time.log",
+		f, err := os.OpenFile("dynamic-method-10000.log",
 			os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 		}

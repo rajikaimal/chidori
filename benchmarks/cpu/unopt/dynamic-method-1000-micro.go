@@ -2,13 +2,10 @@ package main
 
 import "github.com/goruby/goruby/object"
 import "github.com/goruby/goruby/chidorilib"
-import "github.com/pkg/profile"
-import "runtime"
+import "time"
+import "os"
 
 func main() {
-	runtime.SetCPUProfileRate(10000)
-	defer profile.Start().Stop()
-
 	env := object.NewMainEnvironment()
 	_, _ = env.Get("")
 
@@ -51,6 +48,7 @@ func main() {
 	aVal, _ := a.(*object.Integer)
 
 	iVal, _ := i.(*object.Integer)
+	now := time.Now()
 
 	for iVal.Value < aVal.Value {
 
@@ -61,7 +59,7 @@ func main() {
 		iVal = iVal_
 		v7 := iVal_.Value + v6.Value
 		env.Set("i", &object.Integer{Value: v7})
-
+		
 		v8 := programValuesList.Class["Customer"]
 
 		v9 := v8.Call("cust")
@@ -83,6 +81,16 @@ func main() {
 
 		v11 := programValuesList.Object["cust"]
 		v11.Invoke("dynamicMethod")
-
 	}
+
+	defer func() {
+		timeNow := time.Since(now)
+		f, err := os.OpenFile("dynamic-method-1000-micro.log",
+			os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+		}
+		defer f.Close()
+		if _, err := f.WriteString(timeNow.String() + "\n"); err != nil {
+		}
+	}()
 }

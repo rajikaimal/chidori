@@ -2,13 +2,10 @@ package main
 
 import "github.com/goruby/goruby/object"
 import "github.com/goruby/goruby/chidorilib"
-import "github.com/pkg/profile"
-import "runtime"
+import "time"
+import "os"
 
 func main() {
-	runtime.SetCPUProfileRate(10000)
-	defer profile.Start().Stop()
-
 	env := object.NewMainEnvironment()
 	_, _ = env.Get("")
 
@@ -51,6 +48,7 @@ func main() {
 	aVal, _ := a.(*object.Integer)
 
 	iVal, _ := i.(*object.Integer)
+	now := time.Now()
 
 	for iVal.Value < aVal.Value {
 
@@ -72,5 +70,35 @@ func main() {
 
 		v11 := programValuesList.Object["cust"]
 		v11.SetInstanceVariableDy(v11.Class, "@street", "dynamic var street")
+		iov12 := chidorilib.IO{Puts: v11.GetInstanceVariables()}
+		iov12.Out()
+
+		v13 := chidorilib.Method{
+			"dynamicMethod",
+			"main",
+			nil,
+		}
+
+		v13.Body = func(o chidorilib.Object) {
+
+			chidorilib.IO{Puts: o.GetInstanceVariableByName("@street")}.Out()
+
+		}
+
+		methodHashMap["dynamicMethod"] = v13
+
+		v14 := programValuesList.Object["cust"]
+		v14.Invoke("dynamicMethod")
 	}
+
+	defer func() {
+		timeNow := time.Since(now)
+		f, err := os.OpenFile("dynamic-instance-1000-micro.log",
+			os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+		}
+		defer f.Close()
+		if _, err := f.WriteString(timeNow.String() + "\n"); err != nil {
+		}
+	}()
 }

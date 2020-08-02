@@ -8,7 +8,7 @@ import "runtime"
 func main() {
 	runtime.SetCPUProfileRate(10000)
 	defer profile.Start().Stop()
-
+	
 	env := object.NewMainEnvironment()
 	_, _ = env.Get("")
 

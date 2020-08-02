@@ -8,11 +8,11 @@ import "os"
 func main() {
 	env := object.NewMainEnvironment()
 	_, _ = env.Get("")
-
 	now := time.Now()
+
 	defer func() {
 		timeNow := time.Since(now)
-		f, err := os.OpenFile("time.log",
+		f, err := os.OpenFile("dynamic-instance-100.log",
 			os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 		}
@@ -80,5 +80,24 @@ func main() {
 
 		v11 := programValuesList.Object["cust"]
 		v11.SetInstanceVariableDy(v11.Class, "@street", "dynamic var street")
+		iov12 := chidorilib.IO{Puts: v11.GetInstanceVariables()}
+		iov12.Out()
+
+		v13 := chidorilib.Method{
+			"dynamicMethod",
+			"main",
+			nil,
+		}
+
+		v13.Body = func(o chidorilib.Object) {
+
+			chidorilib.IO{Puts: o.GetInstanceVariableByName("@street")}.Out()
+
+		}
+
+		methodHashMap["dynamicMethod"] = v13
+
+		v14 := programValuesList.Object["cust"]
+		v14.Invoke("dynamicMethod")
 	}
 }

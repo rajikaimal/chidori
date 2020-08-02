@@ -8,7 +8,7 @@ import "runtime"
 func main() {
 	runtime.SetCPUProfileRate(10000)
 	defer profile.Start().Stop()
-
+	
 	env := object.NewMainEnvironment()
 	_, _ = env.Get("")
 
@@ -72,5 +72,24 @@ func main() {
 
 		v11 := programValuesList.Object["cust"]
 		v11.SetInstanceVariableDy(v11.Class, "@street", "dynamic var street")
+		iov12 := chidorilib.IO{Puts: v11.GetInstanceVariables()}
+		iov12.Out()
+
+		v13 := chidorilib.Method{
+			"dynamicMethod",
+			"main",
+			nil,
+		}
+
+		v13.Body = func(o chidorilib.Object) {
+
+			chidorilib.IO{Puts: o.GetInstanceVariableByName("@street")}.Out()
+
+		}
+
+		methodHashMap["dynamicMethod"] = v13
+
+		v14 := programValuesList.Object["cust"]
+		v14.Invoke("dynamicMethod")
 	}
 }
