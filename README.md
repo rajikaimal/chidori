@@ -18,10 +18,11 @@ Ruby source code
 
 ```rb
 class Customer
-		def initialize()
-			@name = "Rajika"
-		end
+	def initialize()
+		@name = "Rajika"
+	end
 end
+
 i = 0
 a = 100
 
@@ -33,9 +34,9 @@ while i < a do
 	cust = Customer.new()
 	cust.street = "5th Street"
 	def cust.getStreet
-			puts(@street)
+		puts(@street)
 	end
-  cust.getStreet()
+	cust.getStreet()
 end
 ```
 
